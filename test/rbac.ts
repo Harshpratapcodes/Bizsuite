@@ -41,10 +41,16 @@ async function main() {
   check("admin can submit invoicing", await hasPermission(adminRole, "invoicing", "submit"));
   check("admin can cancel invoicing", await hasPermission(adminRole, "invoicing", "cancel"));
   check("sales can write invoicing draft", await hasPermission(salesRole, "invoicing", "write"));
-  check("sales CANNOT submit invoicing", !(await hasPermission(salesRole, "invoicing", "submit")));
-  check("sales CANNOT cancel invoicing", !(await hasPermission(salesRole, "invoicing", "cancel")));
+  // Eng review D4 (2026-07-04): counter staff submits at the point of sale;
+  // errors are caught by same-day recon + weekly review, fixed by reversal.
+  check("sales CAN submit invoicing (D4 grant)", await hasPermission(salesRole, "invoicing", "submit"));
+  check("sales CANNOT cancel invoicing (admin-only)", !(await hasPermission(salesRole, "invoicing", "cancel")));
   check("readonly can read invoicing", await hasPermission(roRole, "invoicing", "read"));
   check("readonly CANNOT write invoicing", !(await hasPermission(roRole, "invoicing", "write")));
+  // Guard against accidental widening: the D4 grant is invoicing-only for 'sales'.
+  const invRole = await roleId("inventory");
+  check("inventory CANNOT submit invoicing", !(await hasPermission(invRole, "invoicing", "submit")));
+  check("sales CANNOT submit accounting", !(await hasPermission(salesRole, "accounting", "submit")));
 
   const server = app.listen(0);
   await new Promise<void>((r) => server.once("listening", () => r()));
@@ -66,11 +72,12 @@ async function main() {
     const roCookie = await loginCookie(readonly.email, readonly.password);
     const fakeId = crypto.randomUUID();
 
-    // sales lacks invoicing.submit -> blocked at the gate (403), no handler run
+    // D4: sales HAS invoicing.submit -> passes the gate; handler 404s on missing invoice
     const salesSubmit = await fetch(`${base}/api/invoicing/invoices/${fakeId}/submit`, {
       method: "POST", headers: { cookie: salesCookie },
     });
-    check("sales submit -> 403", salesSubmit.status === 403, String(salesSubmit.status));
+    check("sales submit passes gate (not 403, D4)", salesSubmit.status !== 403, String(salesSubmit.status));
+    check("sales submit reaches handler -> 404 missing invoice", salesSubmit.status === 404, String(salesSubmit.status));
 
     // admin has invoicing.submit -> passes the gate; handler 404s on missing invoice
     const adminSubmit = await fetch(`${base}/api/invoicing/invoices/${fakeId}/submit`, {

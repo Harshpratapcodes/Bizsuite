@@ -1,20 +1,21 @@
 import express from "express";
 import { z } from "zod";
-import { createDraftInvoice, invoiceLifecycle } from "./modules/invoicing/service.js";
 import { AppError } from "./shared/errors.js";
 import { pool } from "./shared/db.js";
 import { login, logout } from "./core/auth.js";
-import { requireAuth, actorId, readCookie, sessionCookieOptions, clearCookieOptions, SESSION_COOKIE } from "./core/middleware.js";
-import { requirePermission } from "./core/rbac.js";
+import { requireAuth, readCookie, sessionCookieOptions, clearCookieOptions, SESSION_COOKIE } from "./core/middleware.js";
 import { itemsRouter } from "./modules/inventory/items.routes.js";
 import { companiesRouter } from "./modules/crm/companies.routes.js";
+import { invoicingRouter } from "./modules/invoicing/invoicing.routes.js";
+import { paymentsRouter } from "./modules/invoicing/payments.routes.js";
+import { accountingRouter } from "./modules/accounting/accounting.routes.js";
 
+/**
+ * Mount-only composition root (eng review D6): auth endpoints + one router per
+ * module. Business routes live in src/modules/<module>/<name>.routes.ts.
+ */
 const app = express();
 app.use(express.json());
-
-// The authenticated actor for a request — populated by requireAuth from the
-// session cookie. Audit triggers attribute changes to this user via app.user_id.
-const actor = (req: express.Request): string => actorId(req);
 
 // ---------------------------------------------------------------------------
 // Auth routes
@@ -51,54 +52,13 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Master-data routes
+// Module routers
 // ---------------------------------------------------------------------------
 app.use("/api/inventory/items", itemsRouter);
 app.use("/api/crm/companies", companiesRouter);
-
-const InvoiceSchema = z.object({
-  customerId: z.string().uuid(),
-  warehouseId: z.string().uuid(),
-  placeOfSupply: z.string().length(2),
-  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  lines: z.array(z.object({
-    itemId: z.string().uuid(),
-    description: z.string().min(1),
-    hsn: z.string().regex(/^[0-9]{4,8}$/),
-    qty: z.string().regex(/^\d+(\.\d{1,3})?$/),
-    rate: z.string().regex(/^\d+(\.\d{1,2})?$/),
-    discountPct: z.number().min(0).max(100).optional(),
-    gstRate: z.number(),
-  })).min(1),
-});
-
-app.post("/api/invoicing/invoices", requireAuth, requirePermission("invoicing", "write"), async (req, res, next) => {
-  try {
-    const input = InvoiceSchema.parse(req.body);
-    res.status(201).json(await createDraftInvoice(input, actor(req)));
-  } catch (e) { next(e); }
-});
-
-app.post("/api/invoicing/invoices/:id/submit", requireAuth, requirePermission("invoicing", "submit"), async (req, res, next) => {
-  try { res.json(await invoiceLifecycle.submit(req.params.id!, actor(req))); }
-  catch (e) { next(e); }
-});
-
-app.post("/api/invoicing/invoices/:id/cancel", requireAuth, requirePermission("invoicing", "cancel"), async (req, res, next) => {
-  try { res.json(await invoiceLifecycle.cancel(req.params.id!, actor(req))); }
-  catch (e) { next(e); }
-});
-
-app.get("/api/invoicing/invoices/:id", requireAuth, requirePermission("invoicing", "read"), async (req, res, next) => {
-  try {
-    const { rows: [inv] } = await pool.query(
-      `SELECT i.*, o.amount_paid, o.outstanding, o.payment_status
-         FROM invoices i LEFT JOIN v_invoice_outstanding o ON o.id = i.id
-        WHERE i.id = $1`, [req.params.id]);
-    if (!inv) throw new AppError("NOT_FOUND", "Invoice not found", 404);
-    res.json(inv);
-  } catch (e) { next(e); }
-});
+app.use("/api/invoicing/invoices", invoicingRouter);
+app.use("/api/invoicing/payments", paymentsRouter);
+app.use("/api/accounting", accountingRouter);
 
 app.get("/healthz", async (_req, res) => {
   await pool.query("SELECT 1");

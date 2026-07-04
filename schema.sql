@@ -1075,8 +1075,11 @@ SELECT r.id, m.module,
            WHEN 'inventory' THEN ARRAY['inventory']
            ELSE ARRAY[]::text[]
          END)),
+       -- Eng review D4 (2026-07-04): counter staff ('sales' role) can SUBMIT invoices —
+       -- sales complete at the counter; errors are caught by same-day bill-book
+       -- reconciliation + weekly attribution review, fixed by reversal. Cancel stays admin-only.
        r.name IN ('admin','accounts')
-         OR (r.name = 'sales' AND m.module IN ('crm','sales'))
+         OR (r.name = 'sales' AND m.module IN ('crm','sales','invoicing'))
          OR (r.name = 'inventory' AND m.module = 'inventory'),
        r.name = 'admin'
 FROM roles r
@@ -1122,6 +1125,10 @@ INSERT INTO accounts (code, name, type, is_group, system_key, parent_id) VALUES
   ('2300', 'Stock Received Not Billed', 'liability', false, 'srnb',          (SELECT id FROM accounts WHERE code='2000')),
   ('3100', 'Capital',                   'equity', false, 'capital',          (SELECT id FROM accounts WHERE code='3000')),
   ('3200', 'Retained Earnings',         'equity', false, 'retained_earnings',(SELECT id FROM accounts WHERE code='3000')),
+  -- Opening Balances: counter-account for bill-book-era dues entered at go-live
+  -- (Dr Debtors[party] / Cr 3300 per debtor). Tally-style opening equity — keeps
+  -- pre-system receivables out of Capital. Party-level lumps by design; see TODOS.md #2.
+  ('3300', 'Opening Balances',          'equity', false, 'opening_balance', (SELECT id FROM accounts WHERE code='3000')),
   ('4100', 'Sales',                     'income', false, 'sales',            (SELECT id FROM accounts WHERE code='4000')),
   ('4200', 'Other Income',              'income', false, NULL,               (SELECT id FROM accounts WHERE code='4000')),
   ('4300', 'Rounding Adjustments',      'income', false, 'rounding',         (SELECT id FROM accounts WHERE code='4000')),

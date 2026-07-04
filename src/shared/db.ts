@@ -1,13 +1,21 @@
 import pg from "pg";
+import { loadDotEnv } from "./env.js";
+
+loadDotEnv(); // .env (gitignored) fills anything the real environment didn't set
 
 // NUMERIC comes back as string (pg default) — exactly what we want for money.
-export const pool = new pg.Pool({
-  host: process.env.PGHOST,
-  database: process.env.PGDATABASE ?? "bizsuite",
-  user: process.env.PGUSER,
-  password: process.env.PGPASSWORD,
-  max: 10,
-});
+// DATABASE_URL (e.g. Neon, sslmode=require in the URL) wins over PG* vars.
+export const pool = new pg.Pool(
+  process.env.DATABASE_URL
+    ? { connectionString: process.env.DATABASE_URL, max: 10 }
+    : {
+        host: process.env.PGHOST,
+        database: process.env.PGDATABASE ?? "bizsuite",
+        user: process.env.PGUSER,
+        password: process.env.PGPASSWORD,
+        max: 10,
+      },
+);
 
 export type Tx = pg.PoolClient;
 
