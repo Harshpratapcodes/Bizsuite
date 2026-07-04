@@ -26,3 +26,8 @@ Thumbs.db
 
 # Coverage
 coverage/
+
+# Frontend build + E2E artifacts
+frontend/dist/
+playwright-report/
+test-results/
