@@ -70,3 +70,9 @@ jobs:
 
       - name: Concurrency test (parallel submitters, one winner)
         run: npx tsx test/concurrency.ts
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E (golden staff journey against built SPA)
+        run: npm run test:e2e

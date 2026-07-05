@@ -1,5 +1,4 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 import { useAuth, canEnterOpening } from "./auth";
 import { LoginScreen } from "./screens/Login";
@@ -9,8 +8,7 @@ import { OpeningBalanceScreen } from "./screens/OpeningBalance";
 import { InvoicesScreen } from "./screens/Invoices";
 
 export function App() {
-  const { user, loading, refresh } = useAuth();
-  const qc = useQueryClient();
+  const { user, loading } = useAuth();
   const location = useLocation();
 
   if (loading) return <div className="login-wrap"><p>Loading…</p></div>;
@@ -18,8 +16,9 @@ export function App() {
 
   async function logout() {
     await api.post("/api/auth/logout");
-    qc.clear();
-    refresh();
+    // Full reload: guarantees zero cached business data survives the session,
+    // and sidesteps TanStack's cleared-cache stale-observer gotcha entirely.
+    window.location.assign("/");
   }
 
   return (
