@@ -263,8 +263,11 @@ Anything tempting mid-build goes here, not into the current phase.
 
 ## 10. Current Status
 
-**Active phase:** 0 (Foundation Audit) closing out, with Phase 1 backend already built ahead of plan.
-**Built so far:** validated schema + invariant triggers; `shared` (money/db/errors); `core` (numbering, document engine, **auth**, **RBAC**, middleware); accounting/inventory/invoicing services; **items & companies masters**. Tests green locally: integration (25/25), concurrency, auth, rbac, masters.
-**Not yet built:** git repo + CI, deploy (Caddy/Docker/HTTPS), backups, React app shell, PDF, domain-event bus, pg-boss jobs. See `system-design.md §11` for the full design→built map.
-**Next action:** `git init` + feature-branch workflow, stand up GitHub Actions CI (get the suites green *in CI*), write ADR files 004/005, create `/docs/adr/`. Then start the Phase 1 React app shell.
-**Last updated:** 2026-07-04
+**Active phase:** Approach A (khata rail first) per the approved design doc + eng review — see `~/.gstack/projects/bizsuite/harsh.singh-unknown-design-20260704-150804.md` (ends with the GSTACK review report, ENG CLEARED).
+**Built so far:** everything previously listed PLUS the **khata rail backend**: account 3300 Opening Balances + `enterOpeningBalance` (idempotent, D3); staff invoicing-submit grant (D4) with regression-updated RBAC tests; payments service (draft→allocations→submit→cancel-as-reversal); khata report (reads `v_party_balances`); Friday digest generator (WhatsApp-ready); invoice list endpoint; router-per-module refactor (D6); `DATABASE_URL`/Neon support. GitHub Actions CI workflow written (Postgres 16 service, all suites).
+**Test status:** full suite green against Neon cloud Postgres — integration 25/25, khata 35/35, auth 14/14, rbac 18/18, masters 17/17, concurrency PASS. 109 assertions total.
+**DB:** Neon (cloud) via `DATABASE_URL` in gitignored `.env`; schema loaded 2026-07-04.
+**Not yet built:** React SPA operator UI (next: T6 contracts workspace → T7 SPA khata screens), Playwright E2E (T8), deploy/hardening (T12), CA handshake + CSV export (T11, blocks first system B2B invoice), restore drill (T10).
+**Real-world track:** Friday Pilot starts this week (probe question → top-15 debtors → bill photos → first digest). Staff hire needs owner/date/budget (D11).
+**Next action:** push to GitHub → CI green; then contracts workspace + SPA khata screens.
+**Last updated:** 2026-07-04 (khata rail slice committed)

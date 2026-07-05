@@ -40,22 +40,29 @@ PGDATABASE=bizsuite npx tsx test/concurrency.ts # 5 parallel sales, 1 unit, 1 wi
 PGDATABASE=bizsuite npm run dev                 # API on :3000
 ```
 
-## Test status (last run, PostgreSQL 16.14)
+## Test status (last full run: 2026-07-04, Neon cloud Postgres 18.4)
 - integration: **25/25** — moving average, GST totals, balanced journals,
   COGS at valuation, sub-ledger, outstanding view, oversell rollback,
   cancellation reversal, GL-zero + stock-cache integrity, audit attribution
+- **khata rail: 35/35** — opening balances (idempotent, 422/403/409 guards),
+  on-account + allocated payments (staff-role submit end-to-end per D4),
+  partial-payment status, cancel-as-reversal nets to zero, invoice list,
+  Friday digest incl. empty-week
 - concurrency: **PASS** — 5 parallel submitters, exactly 1 success,
   losers fail with `INSUFFICIENT_STOCK`, ledgers consistent after
-- auth / rbac / masters: **PASS** — login→session→protected-route, wrong
-  password + logout revocation; role matrix + 403 guard; masters CRUD with
-  duplicate/validation guards and readonly-vs-admin write checks
+- auth 14/14 / rbac 18/18 (regression-updated for the D4 grant) / masters 17/17
 
-_All suites run locally today; getting them green in GitHub Actions CI is the
-open Phase 0 item._
+CI: `.github/workflows/ci.yml` runs typecheck + all six suites against a
+Postgres 16 service on every push/PR.
 
-## Next (per the phased plan)
-Phase 0 remainder: git repo + GitHub Actions CI, `.env` convention, `/docs/adr/`
-scaffold (write ADR 004 sessions, 005 node-postgres). Phase 1: React app shell +
-auth guard, admin user-management (create/deactivate), deploy (Caddy + Docker
-Compose + HTTPS), nightly Postgres backup, security hardening (helmet, rate
-limiting, CSRF). See `blueprint.md §5` and `system-design.md §11`.
+## Environment
+Copy `.env.example` → `.env`. Either set `DATABASE_URL` (cloud/Neon, keep
+`sslmode=require` in the URL) or the `PG*` vars (local). `.env` is gitignored;
+CI sets real env vars and ignores it.
+
+## Next (per the approved design doc + eng review)
+Khata rail UI: contracts workspace (T6) → React SPA khata/payment/opening
+screens (T7) → Playwright E2E (T8). Then guided invoice UI (weeks 3-6), CA
+handshake before first system B2B invoice (T11), deploy + hardening (T12),
+restore drill week one of real data (T10). See `blueprint.md §10` and the
+design doc's GSTACK review report.
