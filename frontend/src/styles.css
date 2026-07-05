@@ -1,0 +1,114 @@
+/* BizSuite operator UI — staff-usable baseline: large targets, high contrast,
+   one primary action per screen, errors in plain language near the action.
+   Deliberately unstyled-looking; /plan-design-review comes later. */
+
+:root {
+  --ink: #1a1f2b;
+  --muted: #5b6472;
+  --line: #d9dee6;
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --brand: #1d4ed8;
+  --brand-dark: #1e40af;
+  --danger: #b91c1c;
+  --danger-bg: #fef2f2;
+  --ok: #15803d;
+  --ok-bg: #f0fdf4;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  font-size: 16px;
+}
+
+.app { display: flex; min-height: 100%; }
+.sidebar {
+  width: 220px; flex-shrink: 0; background: #101627; color: #e8ebf2;
+  padding: 16px 0; display: flex; flex-direction: column; gap: 2px;
+}
+.sidebar .brand { font-weight: 700; font-size: 18px; padding: 8px 20px 16px; letter-spacing: .3px; }
+.sidebar a {
+  color: #c3cad8; text-decoration: none; padding: 12px 20px; font-size: 15px;
+}
+.sidebar a:hover { background: #1a2238; color: #fff; }
+.sidebar a.active { background: var(--brand); color: #fff; font-weight: 600; }
+.sidebar .spacer { flex: 1; }
+.sidebar .who { padding: 12px 20px; font-size: 13px; color: #8b93a5; border-top: 1px solid #232c45; }
+.sidebar button.logout {
+  margin: 8px 20px 4px; padding: 8px; background: transparent; color: #c3cad8;
+  border: 1px solid #39415c; border-radius: 6px; cursor: pointer; font-size: 14px;
+}
+.sidebar button.logout:hover { background: #1a2238; color: #fff; }
+
+.main { flex: 1; padding: 28px 32px; max-width: 980px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+.sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  padding: 20px; margin-bottom: 16px;
+}
+
+label { display: block; font-weight: 600; font-size: 14px; margin: 14px 0 6px; }
+label .hint { font-weight: 400; color: var(--muted); }
+input, select {
+  width: 100%; max-width: 420px; padding: 10px 12px; font-size: 16px;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff;
+}
+input:focus, select:focus { outline: 2px solid var(--brand); outline-offset: 1px; border-color: var(--brand); }
+input[aria-invalid="true"] { border-color: var(--danger); }
+.field-error { color: var(--danger); font-size: 13px; margin-top: 4px; }
+
+button.primary {
+  margin-top: 20px; padding: 12px 24px; font-size: 16px; font-weight: 600;
+  background: var(--brand); color: #fff; border: none; border-radius: 8px; cursor: pointer;
+}
+button.primary:hover { background: var(--brand-dark); }
+button.primary:disabled { background: #93a6e8; cursor: not-allowed; }
+button.secondary {
+  padding: 8px 14px; font-size: 14px; background: #fff; color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+}
+button.secondary:hover { border-color: var(--brand); color: var(--brand); }
+
+.banner { padding: 12px 14px; border-radius: 8px; margin: 14px 0; font-size: 15px; }
+.banner.error { background: var(--danger-bg); color: var(--danger); border: 1px solid #fecaca; }
+.banner.ok { background: var(--ok-bg); color: var(--ok); border: 1px solid #bbf7d0; }
+
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th { text-align: left; color: var(--muted); font-size: 13px; font-weight: 600;
+     padding: 8px 10px; border-bottom: 2px solid var(--line); }
+td { padding: 10px; border-bottom: 1px solid var(--line); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+tr:hover td { background: #fafbfd; }
+
+.total-row td { font-weight: 700; border-top: 2px solid var(--ink); border-bottom: none; }
+.empty { color: var(--muted); text-align: center; padding: 32px 0; font-size: 15px; }
+
+.badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.badge.paid { background: var(--ok-bg); color: var(--ok); }
+.badge.partially_paid { background: #fef9c3; color: #854d0e; }
+.badge.unpaid { background: #e0e7ff; color: #3730a3; }
+.badge.overdue { background: var(--danger-bg); color: var(--danger); }
+.badge.draft { background: #f1f5f9; color: var(--muted); }
+.badge.submitted { background: var(--ok-bg); color: var(--ok); }
+.badge.cancelled { background: #f1f5f9; color: var(--muted); text-decoration: line-through; }
+
+.login-wrap { display: grid; place-items: center; min-height: 100%; }
+.login-card { width: 360px; }
+
+pre.digest {
+  background: #101627; color: #e8ebf2; padding: 16px; border-radius: 8px;
+  white-space: pre-wrap; font-family: inherit; font-size: 15px; line-height: 1.5;
+}
+
+.alloc-row { display: flex; gap: 10px; align-items: center; margin: 6px 0; }
+.alloc-row .inv { flex: 1; font-size: 14px; }
+.alloc-row input { max-width: 140px; }
+.confirm-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 14px; margin-top: 16px; }
+.row { display: flex; gap: 16px; flex-wrap: wrap; }
+.row > * { flex: 1; min-width: 200px; }

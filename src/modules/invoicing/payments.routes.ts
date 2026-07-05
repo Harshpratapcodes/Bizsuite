@@ -1,26 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
+import { CreatePayment } from "@bizsuite/contracts";
 import { requireAuth, actorId } from "../../core/middleware.js";
 import { requirePermission } from "../../core/rbac.js";
 import { createDraftPayment, paymentLifecycle } from "./payments.service.js";
 import { pool } from "../../shared/db.js";
 import { AppError } from "../../shared/errors.js";
-
-const money = z.string().regex(/^\d+(\.\d{1,2})?$/, "expected a decimal like 5000.00");
-
-const CreatePayment = z.object({
-  customerId: z.string().uuid(),
-  amount: money,
-  mode: z.enum(["cash", "bank_transfer", "upi", "cheque", "card"]),
-  depositAccountKey: z.enum(["cash", "bank"]),
-  referenceNo: z.string().max(64).optional(),
-  docDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  notes: z.string().optional(),
-  allocations: z.array(z.object({
-    invoiceId: z.string().uuid(),
-    amount: money,
-  })).optional(),
-});
 
 const ListQuery = z.object({
   status: z.enum(["draft", "submitted", "cancelled"]).optional(),

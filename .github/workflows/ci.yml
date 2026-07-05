@@ -45,6 +45,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Build frontend (typecheck + vite build)
+        run: npm run build:web
+
       - name: Load schema
         run: psql -h localhost -U postgres -d bizsuite -f schema.sql
         env:

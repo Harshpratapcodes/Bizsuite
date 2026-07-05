@@ -1,4 +1,5 @@
 import { pool } from "../../shared/db.js";
+import type { KhataRow, KhataReport, DigestData, Digest } from "@bizsuite/contracts";
 
 /**
  * Read-side reports for the khata (receivables) and the Friday digest.
@@ -9,17 +10,7 @@ import { pool } from "../../shared/db.js";
  * with no invoice rows, and only the party view sees them.
  */
 
-export interface KhataRow {
-  partyId: string;
-  partyName: string;
-  balance: string;          // decimal string, +ve = they owe us
-}
-
-export interface KhataReport {
-  rows: KhataRow[];
-  totalReceivable: string;  // sum of positive balances
-  asOf: string;             // ISO timestamp
-}
+export type { KhataRow, KhataReport, DigestData, Digest };
 
 export async function khataReport(): Promise<KhataReport> {
   const { rows } = await pool.query<{ party_id: string; party_name: string; balance: string }>(
@@ -40,22 +31,6 @@ export async function khataReport(): Promise<KhataReport> {
 // total receivables, top-5 debtors, this week's sales (+ payments received,
 // because "kitna aaya" is the natural sibling of "kitna baaki hai").
 // ---------------------------------------------------------------------------
-export interface DigestData {
-  weekStart: string;
-  weekEnd: string;
-  totalReceivable: string;
-  topDebtors: KhataRow[];
-  weekSalesTotal: string;
-  weekSalesCount: number;
-  weekPaymentsTotal: string;
-  weekPaymentsCount: number;
-}
-
-export interface Digest {
-  text: string;   // ready to paste into WhatsApp
-  data: DigestData;
-}
-
 /** ₹ formatting with Indian digit grouping (1,23,456.78). */
 function inr(decimal: string | number): string {
   const n = typeof decimal === "number" ? decimal : Number(decimal);

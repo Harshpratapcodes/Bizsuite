@@ -1,5 +1,9 @@
 import express from "express";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
+import { Login } from "@bizsuite/contracts";
 import { AppError } from "./shared/errors.js";
 import { pool } from "./shared/db.js";
 import { login, logout } from "./core/auth.js";
@@ -20,14 +24,9 @@ app.use(express.json());
 // ---------------------------------------------------------------------------
 // Auth routes
 // ---------------------------------------------------------------------------
-const LoginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
-});
-
 app.post("/api/auth/login", async (req, res, next) => {
   try {
-    const { email, password } = LoginSchema.parse(req.body);
+    const { email, password } = Login.parse(req.body);
     const result = await login(email, password, {
       ip: req.ip,
       userAgent: req.header("user-agent"),
@@ -65,6 +64,19 @@ app.get("/healthz", async (_req, res) => {
   res.json({ ok: true });
 });
 
+// ---------------------------------------------------------------------------
+// SPA: serve frontend/dist when it exists (vite build output). Dev uses the
+// Vite server on :5173 with an /api proxy instead. GET fallback -> index.html
+// so client-side routes deep-link; /api and /healthz never fall through here.
+// ---------------------------------------------------------------------------
+const spaDist = path.resolve(fileURLToPath(new URL(".", import.meta.url)), "../frontend/dist");
+if (fs.existsSync(spaDist)) {
+  app.use(express.static(spaDist));
+  app.get(/^\/(?!api\/|healthz).*/, (_req, res) => {
+    res.sendFile(path.join(spaDist, "index.html"));
+  });
+}
+
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof z.ZodError) {
     return res.status(422).json({ error: { code: "VALIDATION", details: err.flatten() } });
@@ -77,7 +89,6 @@ export { app };
 
 // Start the HTTP listener only when run as the entry point (not when imported
 // by tests, which start their own ephemeral listener).
-import { fileURLToPath } from "node:url";
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT ?? 3000);
   app.listen(port, () => console.log(`bizsuite listening on :${port}`));

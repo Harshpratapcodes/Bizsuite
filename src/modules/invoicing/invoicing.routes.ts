@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { CreateInvoice } from "@bizsuite/contracts";
 import { requireAuth, actorId } from "../../core/middleware.js";
 import { requirePermission } from "../../core/rbac.js";
 import { createDraftInvoice, invoiceLifecycle } from "./service.js";
@@ -9,24 +10,9 @@ import { AppError } from "../../shared/errors.js";
 /**
  * Invoicing routes — draft → submit → cancel lifecycle plus list/detail reads.
  * Moved out of server.ts (eng review D6) so every module follows the same
- * router-per-module pattern; server.ts is mount-only.
+ * router-per-module pattern; server.ts is mount-only. Request shapes live in
+ * @bizsuite/contracts (D7) — the SPA validates with the same objects.
  */
-
-const InvoiceSchema = z.object({
-  customerId: z.string().uuid(),
-  warehouseId: z.string().uuid(),
-  placeOfSupply: z.string().length(2),
-  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  lines: z.array(z.object({
-    itemId: z.string().uuid(),
-    description: z.string().min(1),
-    hsn: z.string().regex(/^[0-9]{4,8}$/),
-    qty: z.string().regex(/^\d+(\.\d{1,3})?$/),
-    rate: z.string().regex(/^\d+(\.\d{1,2})?$/),
-    discountPct: z.number().min(0).max(100).optional(),
-    gstRate: z.number(),
-  })).min(1),
-});
 
 const ListQuery = z.object({
   status: z.enum(["draft", "submitted", "cancelled"]).optional(),
@@ -41,7 +27,7 @@ export const invoicingRouter = Router();
 
 invoicingRouter.post("/", requireAuth, requirePermission("invoicing", "write"), async (req, res, next) => {
   try {
-    const input = InvoiceSchema.parse(req.body);
+    const input = CreateInvoice.parse(req.body);
     res.status(201).json(await createDraftInvoice(input, actorId(req)));
   } catch (e) { next(e); }
 });

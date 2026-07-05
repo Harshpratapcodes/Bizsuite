@@ -1,17 +1,9 @@
 import { Router } from "express";
-import { z } from "zod";
+import { OpeningBalance } from "@bizsuite/contracts";
 import { requireAuth, actorId } from "../../core/middleware.js";
 import { requirePermission } from "../../core/rbac.js";
 import { enterOpeningBalance } from "./opening-balance.js";
 import { khataReport, fridayDigest } from "./reports.js";
-
-const money = z.string().regex(/^\d+(\.\d{1,2})?$/, "expected a decimal like 40000.00");
-
-const OpeningBalance = z.object({
-  customerId: z.string().uuid(),
-  amount: money,
-  asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-});
 
 export const accountingRouter = Router();
 

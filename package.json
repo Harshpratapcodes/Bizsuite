@@ -3,9 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "frontend"
+  ],
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
+    "dev:web": "npm run dev --workspace frontend",
+    "build:web": "npm run build --workspace frontend",
     "test:integration": "tsx test/integration.ts",
     "test:auth": "tsx test/auth.ts",
     "test:rbac": "tsx test/rbac.ts",
@@ -14,6 +20,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@bizsuite/contracts": "*",
     "@node-rs/argon2": "^2.0.2",
     "express": "^4.19.2",
     "pg": "^8.12.0",
