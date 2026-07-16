@@ -242,6 +242,7 @@ Total effort: **18–24 weeks of phased work.** Estimates include the deliberate
 | 003 | (from planning) Append-only ledger, reversals only | Accepted | — |
 | 004 | Session vs JWT auth → **sessions** (argon2id + hashed opaque tokens, 30-day TTL) | Accepted (file pending) | Phase 1 |
 | 005 | Raw node-postgres over an ORM (was: Drizzle) | Accepted (file pending) | Phase 0 |
+| 006 | Build on our own stack; mine Odoo/ERPNext as read-only references, don't rebase onto them | Accepted | 2026-07-16 |
 
 "File pending" = decision is made and reflected in code/`system-design.md`, but the `/docs/adr/NNN-*.md` file is not yet written. Add a row + file in `/docs/adr/` for every significant decision.
 
