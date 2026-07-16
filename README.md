@@ -23,8 +23,14 @@ design→built), `schema.sql`.
   GST treatment, GSTIN validation, billing/shipping addresses)
 - **modules/invoicing** — GST math (per-line half-up rounding, CGST/SGST vs
   IGST by place of supply, rupee rounding adjustment), `createDraftInvoice`,
-  and the **reference lifecycle**: submit = lock → number → sales journal →
+  `updateDraftInvoice` (draft-only full replace — the edit-and-retry rail),
+  invoice detail endpoint (header + lines + parties, print-ready), and the
+  **reference lifecycle**: submit = lock → number → sales journal →
   stock issues → COGS journal in one transaction; cancel = full reversal
+- **frontend/** — operator SPA (staff-usable bar): khata, payments, opening
+  balances, invoice register, and the **guided invoice flow** — new sale →
+  server-computed review → submit → print-CSS tax invoice; drafts resume from
+  the register; INSUFFICIENT_STOCK surfaces in plain language with edit-and-retry
 - **server.ts** — Express app: auth routes, masters routes, and the invoice
   lifecycle, all zod-validated and behind `requireAuth` + `requirePermission`
 
@@ -40,7 +46,7 @@ PGDATABASE=bizsuite npx tsx test/concurrency.ts # 5 parallel sales, 1 unit, 1 wi
 PGDATABASE=bizsuite npm run dev                 # API on :3000
 ```
 
-## Test status (last full run: 2026-07-04, Neon cloud Postgres 18.4)
+## Test status (last full run: 2026-07-16, Neon cloud Postgres 18.4)
 - integration: **25/25** — moving average, GST totals, balanced journals,
   COGS at valuation, sub-ledger, outstanding view, oversell rollback,
   cancellation reversal, GL-zero + stock-cache integrity, audit attribution
@@ -51,6 +57,10 @@ PGDATABASE=bizsuite npm run dev                 # API on :3000
 - concurrency: **PASS** — 5 parallel submitters, exactly 1 success,
   losers fail with `INSUFFICIENT_STOCK`, ledgers consistent after
 - auth 14/14 / rbac 18/18 (regression-updated for the D4 grant) / masters 17/17
+- **Playwright E2E 8/8** (`npm run test:e2e`, real SPA + real DB): khata rail
+  (golden payment journey, role gating) + invoice rail (guided invoice → server
+  totals → submit → khata; insufficient-stock edit-and-retry; admin-only
+  cancel; draft resume from the register)
 
 CI: `.github/workflows/ci.yml` runs typecheck + all six suites against a
 Postgres 16 service on every push/PR.
@@ -61,8 +71,8 @@ Copy `.env.example` → `.env`. Either set `DATABASE_URL` (cloud/Neon, keep
 CI sets real env vars and ignores it.
 
 ## Next (per the approved design doc + eng review)
-Khata rail UI: contracts workspace (T6) → React SPA khata/payment/opening
-screens (T7) → Playwright E2E (T8). Then guided invoice UI (weeks 3-6), CA
-handshake before first system B2B invoice (T11), deploy + hardening (T12),
-restore drill week one of real data (T10). See `blueprint.md §10` and the
-design doc's GSTACK review report.
+T6–T8 and the guided invoice UI are done. Remaining: **CA handshake + monthly
+CSV export (T11 — blocks the first real system B2B invoice)**, deploy +
+hardening (T12), restore drill week one of real data (T10), admin UI for
+users/warehouses. See `blueprint.md §10` and the design doc's GSTACK review
+report.

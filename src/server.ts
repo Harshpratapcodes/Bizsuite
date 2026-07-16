@@ -8,7 +8,9 @@ import { AppError } from "./shared/errors.js";
 import { pool } from "./shared/db.js";
 import { login, logout } from "./core/auth.js";
 import { requireAuth, readCookie, sessionCookieOptions, clearCookieOptions, SESSION_COOKIE } from "./core/middleware.js";
+import { settingsRouter } from "./core/settings.routes.js";
 import { itemsRouter } from "./modules/inventory/items.routes.js";
+import { warehousesRouter } from "./modules/inventory/warehouses.routes.js";
 import { companiesRouter } from "./modules/crm/companies.routes.js";
 import { invoicingRouter } from "./modules/invoicing/invoicing.routes.js";
 import { paymentsRouter } from "./modules/invoicing/payments.routes.js";
@@ -53,7 +55,9 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
 // ---------------------------------------------------------------------------
 // Module routers
 // ---------------------------------------------------------------------------
+app.use("/api/settings", settingsRouter);
 app.use("/api/inventory/items", itemsRouter);
+app.use("/api/inventory/warehouses", warehousesRouter);
 app.use("/api/crm/companies", companiesRouter);
 app.use("/api/invoicing/invoices", invoicingRouter);
 app.use("/api/invoicing/payments", paymentsRouter);

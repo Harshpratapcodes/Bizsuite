@@ -59,7 +59,8 @@ async function main() {
   console.log("== STEP 2: draft invoice — 12 units @ ₹250, 5% discount, GST 18%, INTER-state ==");
   const { id: invId } = await createDraftInvoice({
     customerId: customer!.id, warehouseId: wh!.id, placeOfSupply: "07",
-    dueDate: "2026-07-15",
+    // +30 days, computed — a hardcoded date rotted into 'overdue' once CURRENT_DATE passed it
+    dueDate: new Date(Date.now() + 30 * 86400_000).toISOString().slice(0, 10),
     lines: [{ itemId: item!.id, description: "Steel Bracket", hsn: "7326",
               qty: "12.000", rate: "250.00", discountPct: 5, gstRate: 18 }],
   }, userId);

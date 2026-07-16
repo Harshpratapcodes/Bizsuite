@@ -3,7 +3,7 @@ import { z } from "zod";
 import { CreateInvoice } from "@bizsuite/contracts";
 import { requireAuth, actorId } from "../../core/middleware.js";
 import { requirePermission } from "../../core/rbac.js";
-import { createDraftInvoice, invoiceLifecycle } from "./service.js";
+import { createDraftInvoice, updateDraftInvoice, invoiceLifecycle } from "./service.js";
 import { pool } from "../../shared/db.js";
 import { AppError } from "../../shared/errors.js";
 
@@ -58,6 +58,15 @@ invoicingRouter.get("/", requireAuth, requirePermission("invoicing", "read"), as
   } catch (e) { next(e); }
 });
 
+// Full replace of a draft (edit-and-retry after INSUFFICIENT_STOCK; resume a
+// mid-entry draft). Same contract as create; service enforces draft-only.
+invoicingRouter.patch("/:id", requireAuth, requirePermission("invoicing", "write"), async (req, res, next) => {
+  try {
+    const input = CreateInvoice.parse(req.body);
+    res.json(await updateDraftInvoice(req.params.id!, input, actorId(req)));
+  } catch (e) { next(e); }
+});
+
 invoicingRouter.post("/:id/submit", requireAuth, requirePermission("invoicing", "submit"), async (req, res, next) => {
   try { res.json(await invoiceLifecycle.submit(req.params.id!, actorId(req))); }
   catch (e) { next(e); }
@@ -68,13 +77,39 @@ invoicingRouter.post("/:id/cancel", requireAuth, requirePermission("invoicing", 
   catch (e) { next(e); }
 });
 
+// Detail = header + lines + customer + company snapshot: one fetch drives the
+// review step, the resume-draft edit, and the print-CSS invoice.
 invoicingRouter.get("/:id", requireAuth, requirePermission("invoicing", "read"), async (req, res, next) => {
   try {
     const { rows: [inv] } = await pool.query(
-      `SELECT i.*, o.amount_paid, o.outstanding, o.payment_status
-         FROM invoices i LEFT JOIN v_invoice_outstanding o ON o.id = i.id
+      `SELECT i.id, i.kind, i.doc_no, i.doc_date::text, i.status, i.customer_id,
+              i.source_warehouse_id,
+              i.place_of_supply, i.is_inter_state, i.due_date::text,
+              i.company_gstin, i.customer_gstin,
+              i.subtotal, i.discount_total, i.taxable_total,
+              i.cgst_total, i.sgst_total, i.igst_total,
+              i.rounding_adjustment, i.grand_total,
+              i.submitted_at, i.created_at,
+              o.amount_paid, o.outstanding, o.payment_status,
+              jsonb_build_object(
+                'name', c.name, 'gstin', c.gstin, 'state_code', c.state_code,
+                'billing_address', c.billing_address
+              ) AS customer,
+              (SELECT jsonb_build_object(
+                        'legal_name', s.legal_name, 'gstin', s.gstin,
+                        'state_code', s.state_code, 'address', s.address,
+                        'invoice_terms', s.invoice_terms)
+                 FROM company_settings s WHERE s.id = 1) AS company
+         FROM invoices i
+         JOIN companies c ON c.id = i.customer_id
+         LEFT JOIN v_invoice_outstanding o ON o.id = i.id
         WHERE i.id = $1`, [req.params.id]);
     if (!inv) throw new AppError("NOT_FOUND", "Invoice not found", 404);
-    res.json(inv);
+    const { rows: lines } = await pool.query(
+      `SELECT id, item_id, description, hsn_sac_code, qty::text, uom, rate,
+              discount_pct, taxable_value, gst_rate, cgst_amount, sgst_amount,
+              igst_amount, line_total, sort_order
+         FROM invoice_lines WHERE invoice_id = $1 ORDER BY sort_order`, [req.params.id]);
+    res.json({ ...inv, lines });
   } catch (e) { next(e); }
 });

@@ -1,11 +1,13 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { api } from "./api";
-import { useAuth, canEnterOpening } from "./auth";
+import { useAuth, canEnterOpening, canCreateInvoice } from "./auth";
 import { LoginScreen } from "./screens/Login";
 import { KhataScreen } from "./screens/Khata";
 import { PaymentNewScreen } from "./screens/PaymentNew";
 import { OpeningBalanceScreen } from "./screens/OpeningBalance";
 import { InvoicesScreen } from "./screens/Invoices";
+import { InvoiceNewScreen } from "./screens/InvoiceNew";
+import { InvoiceDetailScreen } from "./screens/InvoiceDetail";
 
 export function App() {
   const { user, loading } = useAuth();
@@ -26,8 +28,9 @@ export function App() {
       <nav className="sidebar">
         <div className="brand">BizSuite</div>
         <NavLink to="/khata">Khata (dues)</NavLink>
+        {canCreateInvoice(user) && <NavLink to="/invoices/new">New sale (invoice)</NavLink>}
         <NavLink to="/payments/new">Payment received</NavLink>
-        <NavLink to="/invoices">Invoices</NavLink>
+        <NavLink to="/invoices" end>Invoices</NavLink>
         {canEnterOpening(user) && <NavLink to="/opening-balances">Opening balances</NavLink>}
         <div className="spacer" />
         <div className="who">{user.fullName}<br />({user.roleName})</div>
@@ -39,6 +42,9 @@ export function App() {
           <Route path="/khata" element={<KhataScreen />} />
           <Route path="/payments/new" element={<PaymentNewScreen />} />
           <Route path="/invoices" element={<InvoicesScreen />} />
+          {canCreateInvoice(user) && <Route path="/invoices/new" element={<InvoiceNewScreen />} />}
+          {canCreateInvoice(user) && <Route path="/invoices/:id/edit" element={<InvoiceNewScreen />} />}
+          <Route path="/invoices/:id" element={<InvoiceDetailScreen />} />
           {canEnterOpening(user) && <Route path="/opening-balances" element={<OpeningBalanceScreen />} />}
           <Route path="*" element={<Navigate to="/khata" replace state={{ from: location }} />} />
         </Routes>

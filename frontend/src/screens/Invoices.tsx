@@ -1,16 +1,19 @@
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import type { InvoiceListRow } from "@bizsuite/contracts";
 import { api, friendlyMessage } from "../api";
+import { useAuth, canCreateInvoice } from "../auth";
 import { inr } from "./Khata";
 
 /**
- * Read-only invoice register. Creation stays on the bill book during the
- * interim phase (design doc premise 3); the guided invoice flow ships in the
- * second half of Approach A, after the CA handshake (D9/D10).
+ * Invoice register + entry point to the guided flow. Clicking a row opens the
+ * detail screen — for drafts that IS the resume path (review, edit, submit).
  */
 export function InvoicesScreen() {
   const [status, setStatus] = useState<string>("submitted");
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
   const invoices = useQuery({
     queryKey: ["invoices", status],
@@ -19,8 +22,15 @@ export function InvoicesScreen() {
 
   return (
     <>
-      <h1>Invoices</h1>
-      <p className="sub">System invoices. New sales stay on the bill book until the invoice flow ships (per plan).</p>
+      <div className="page-head">
+        <div>
+          <h1>Invoices</h1>
+          <p className="sub">System invoices (B2B GST sales). Walk-in counter sales stay on the bill book until staff handover.</p>
+        </div>
+        {canCreateInvoice(user) && (
+          <Link className="btn-link" to="/invoices/new">＋ New sale</Link>
+        )}
+      </div>
 
       <div className="card">
         <label htmlFor="status" style={{ marginTop: 0 }}>Show</label>
@@ -48,7 +58,7 @@ export function InvoicesScreen() {
             </thead>
             <tbody>
               {invoices.data.map((r) => (
-                <tr key={r.id}>
+                <tr key={r.id} className="rowlink" onClick={() => navigate(`/invoices/${r.id}`)}>
                   <td>{r.doc_no ?? <span className="badge draft">draft</span>}</td>
                   <td>{r.doc_date}</td>
                   <td>{r.customer_name}</td>

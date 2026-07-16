@@ -5,6 +5,11 @@ import { api } from "../api";
 export interface CustomerOption {
   id: string;
   name: string;
+  // present in the API response; used by the invoice flow to default
+  // place-of-supply and show GSTIN. Optional so existing callers are unchanged.
+  gstin?: string | null;
+  state_code?: string | null;
+  gst_treatment?: string;
 }
 
 /**

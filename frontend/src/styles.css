@@ -106,9 +106,82 @@ pre.digest {
   white-space: pre-wrap; font-family: inherit; font-size: 15px; line-height: 1.5;
 }
 
+.page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.btn-link {
+  display: inline-block; padding: 10px 18px; font-size: 15px; font-weight: 600;
+  background: var(--brand); color: #fff; border-radius: 8px; text-decoration: none;
+  white-space: nowrap;
+}
+.btn-link:hover { background: var(--brand-dark); }
+a.secondary.btn-link { background: #fff; color: var(--ink); border: 1px solid var(--line); font-weight: 400; }
+a.secondary.btn-link:hover { border-color: var(--brand); color: var(--brand); }
+
+tr.rowlink { cursor: pointer; }
+
+.banner.draft-note { background: #fffbeb; color: #854d0e; border: 1px solid #fde68a; }
+
+/* Guided invoice entry: one flex row per line */
+.line-row {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 12px 0; border-bottom: 1px solid var(--line);
+}
+.line-row .grow { flex: 1; min-width: 220px; }
+.line-row .grow input { max-width: none; }
+.line-row .cell-qty input { max-width: 90px; }
+.line-row .cell-rate input { max-width: 120px; }
+.line-row .cell-disc input { max-width: 70px; }
+.cell-hint { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+.line-amount {
+  min-width: 110px; text-align: right; font-weight: 600;
+  font-variant-numeric: tabular-nums; padding-top: 10px;
+}
+.stock-badge { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.stock-badge.ok { background: var(--ok-bg); color: var(--ok); }
+.stock-badge.out { background: var(--danger-bg); color: var(--danger); }
+.stock-badge.svc { background: #e0e7ff; color: #3730a3; }
+
+/* Server-computed totals block (review + detail) */
+.totals { margin-left: auto; max-width: 360px; margin-top: 16px; }
+.totals .trow { display: flex; justify-content: space-between; padding: 6px 0; font-variant-numeric: tabular-nums; }
+.totals .grand { border-top: 2px solid var(--ink); font-weight: 700; font-size: 18px; padding-top: 10px; }
+.totals .words { color: var(--muted); font-size: 13px; margin-top: 8px; text-align: right; }
+
 .alloc-row { display: flex; gap: 10px; align-items: center; margin: 6px 0; }
 .alloc-row .inv { flex: 1; font-size: 14px; }
 .alloc-row input { max-width: 140px; }
 .confirm-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 14px; margin-top: 16px; }
 .row { display: flex; gap: 16px; flex-wrap: wrap; }
 .row > * { flex: 1; min-width: 200px; }
+
+/* ---------------------------------------------------------------------------
+   Print-CSS GST invoice (design doc: "Print-CSS invoices, no PDF engine yet").
+   On screen the sheet is hidden; in print ONLY the sheet is visible.
+--------------------------------------------------------------------------- */
+.print-sheet { display: none; }
+
+@media print {
+  body * { visibility: hidden; }
+  .print-sheet, .print-sheet * { visibility: visible; }
+  .print-sheet {
+    display: block; position: absolute; left: 0; top: 0; width: 100%;
+    background: #fff; color: #000; font-size: 12px; padding: 8mm;
+    font-family: "Segoe UI", Roboto, sans-serif;
+  }
+  .print-sheet .ps-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 2px solid #000; padding-bottom: 8px; }
+  .print-sheet .ps-company { font-size: 18px; font-weight: 700; }
+  .print-sheet .ps-title { font-size: 14px; font-weight: 700; letter-spacing: 2px; }
+  .print-sheet table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  .print-sheet .ps-meta td { border: 1px solid #000; padding: 4px 8px; }
+  .print-sheet .ps-billto { margin-top: 10px; border: 1px solid #000; padding: 8px; }
+  .print-sheet .ps-lines th, .print-sheet .ps-lines td { border: 1px solid #000; padding: 4px 6px; text-align: left; }
+  .print-sheet .ps-lines th.num, .print-sheet .ps-lines td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .print-sheet .ps-totals { display: flex; justify-content: flex-end; }
+  .print-sheet .ps-totals table { width: 45%; margin-top: 8px; }
+  .print-sheet .ps-totals td { padding: 3px 8px; }
+  .print-sheet .ps-totals td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .print-sheet .ps-grand td { border-top: 2px solid #000; font-weight: 700; font-size: 14px; }
+  .print-sheet .ps-words { margin-top: 8px; }
+  .print-sheet .ps-terms { margin-top: 10px; font-size: 11px; white-space: pre-wrap; }
+  .print-sheet .ps-sign { margin-top: 36px; display: flex; flex-direction: column; align-items: flex-end; gap: 40px; }
+  .print-sheet .ps-sign-space { border-top: 1px solid #000; padding-top: 4px; }
+}

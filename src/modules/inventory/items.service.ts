@@ -26,11 +26,16 @@ export interface Item extends Record<string, unknown> {
   name: string;
 }
 
+// on_hand: live stock summed across warehouses (single-warehouse in practice) —
+// shown in the item picker so staff see availability BEFORE submit fails.
 const SELECT = `
-  SELECT id, sku, name, description, uom, hsn_sac_code, gst_rate,
-         is_stock_item, reorder_level, standard_selling_rate, standard_buying_rate,
-         is_active, created_at, updated_at
-    FROM items`;
+  SELECT i.id, i.sku, i.name, i.description, i.uom, i.hsn_sac_code, i.gst_rate,
+         i.is_stock_item, i.reorder_level, i.standard_selling_rate, i.standard_buying_rate,
+         i.is_active, i.created_at, i.updated_at,
+         COALESCE(w.on_hand, 0)::text AS on_hand
+    FROM items i
+    LEFT JOIN (SELECT item_id, SUM(qty_on_hand) AS on_hand
+                 FROM item_warehouse GROUP BY item_id) w ON w.item_id = i.id`;
 
 export async function createItem(input: ItemInput, userId: string): Promise<Item> {
   return withTransaction(userId, async (tx) => {

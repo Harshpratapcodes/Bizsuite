@@ -14,64 +14,122 @@ export interface CreateInvoiceInput {
   customerId: string;
   warehouseId: string;
   placeOfSupply: string;        // buyer state code
+  docDate?: string;             // back-entry from bill photos; never in the future
   dueDate?: string;
   lines: {
     itemId: string;
     description: string;
     hsn: string;
     qty: string;
+    uom?: string;
     rate: string;               // "1500.00"
     discountPct?: number;
     gstRate: number;
   }[];
 }
 
+/** Shared by create + update: company/customer lookups, GST math, future-date guard. */
+async function prepareInvoice(tx: Tx, input: CreateInvoiceInput) {
+  if (input.docDate && input.docDate > new Date().toISOString().slice(0, 10)) {
+    throw new AppError("INVALID_DATE", "Invoice date cannot be in the future", 422);
+  }
+  const { rows: [settings] } = await tx.query<{ state_code: string; gstin: string | null }>(
+    `SELECT state_code, gstin FROM company_settings WHERE id = 1`,
+  );
+  if (!settings) throw new AppError("NOT_CONFIGURED", "Company settings missing", 500);
+  const isInterState = settings.state_code !== input.placeOfSupply;
+
+  const taxInput: TaxableLineInput[] = input.lines.map((l) => ({
+    qty: l.qty, ratePaise: toPaise(l.rate), discountPct: l.discountPct ?? 0, gstRate: l.gstRate,
+  }));
+  const t = computeGst(taxInput, isInterState);
+
+  const { rows: [customer] } = await tx.query<{ gstin: string | null }>(
+    `SELECT gstin FROM companies WHERE id = $1 AND is_customer`, [input.customerId]);
+  if (!customer) throw new AppError("NOT_FOUND", "Customer not found", 404);
+
+  return { settings, customer, isInterState, t };
+}
+
+async function insertLines(
+  tx: Tx, invoiceId: string, input: CreateInvoiceInput, t: ReturnType<typeof computeGst>,
+): Promise<void> {
+  for (let i = 0; i < input.lines.length; i++) {
+    const l = input.lines[i]!; const c = t.lines[i]!;
+    await tx.query(
+      `INSERT INTO invoice_lines
+         (invoice_id, item_id, description, hsn_sac_code, qty, uom, rate, discount_pct,
+          taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total, sort_order)
+       VALUES ($1,$2,$3,$4,$5,COALESCE($6,'Nos'),$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+      [invoiceId, l.itemId, l.description, l.hsn, l.qty, l.uom ?? null, l.rate, l.discountPct ?? 0,
+       toDecimalString(c.taxableValue), l.gstRate,
+       toDecimalString(c.cgst), toDecimalString(c.sgst), toDecimalString(c.igst),
+       toDecimalString(c.lineTotal), i],
+    );
+  }
+}
+
 export async function createDraftInvoice(input: CreateInvoiceInput, userId: string): Promise<{ id: string }> {
   return withTransaction(userId, async (tx) => {
-    const { rows: [settings] } = await tx.query<{ state_code: string; gstin: string | null }>(
-      `SELECT state_code, gstin FROM company_settings WHERE id = 1`,
-    );
-    if (!settings) throw new AppError("NOT_CONFIGURED", "Company settings missing", 500);
-    const isInterState = settings.state_code !== input.placeOfSupply;
-
-    const taxInput: TaxableLineInput[] = input.lines.map((l) => ({
-      qty: l.qty, ratePaise: toPaise(l.rate), discountPct: l.discountPct ?? 0, gstRate: l.gstRate,
-    }));
-    const t = computeGst(taxInput, isInterState);
-
-    const { rows: [customer] } = await tx.query<{ gstin: string | null }>(
-      `SELECT gstin FROM companies WHERE id = $1 AND is_customer`, [input.customerId]);
-    if (!customer) throw new AppError("NOT_FOUND", "Customer not found", 404);
+    const { settings, customer, isInterState, t } = await prepareInvoice(tx, input);
 
     const { rows: [inv] } = await tx.query<{ id: string }>(
       `INSERT INTO invoices
          (kind, customer_id, source_warehouse_id, company_gstin, customer_gstin,
-          place_of_supply, is_inter_state, due_date,
+          place_of_supply, is_inter_state, doc_date, due_date,
           subtotal, discount_total, taxable_total, cgst_total, sgst_total, igst_total,
           rounding_adjustment, grand_total, created_by)
-       VALUES ('invoice', $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+       VALUES ('invoice', $1,$2,$3,$4,$5,$6,COALESCE($7,CURRENT_DATE),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        RETURNING id`,
       [input.customerId, input.warehouseId, settings.gstin, customer.gstin,
-       input.placeOfSupply, isInterState, input.dueDate ?? null,
+       input.placeOfSupply, isInterState, input.docDate ?? null, input.dueDate ?? null,
        toDecimalString(t.subtotal), toDecimalString(t.discountTotal), toDecimalString(t.taxableTotal),
        toDecimalString(t.cgstTotal), toDecimalString(t.sgstTotal), toDecimalString(t.igstTotal),
        toDecimalString(t.roundingAdjustment), toDecimalString(t.grandTotal), userId],
     );
 
-    for (let i = 0; i < input.lines.length; i++) {
-      const l = input.lines[i]!; const c = t.lines[i]!;
-      await tx.query(
-        `INSERT INTO invoice_lines
-           (invoice_id, item_id, description, hsn_sac_code, qty, rate, discount_pct,
-            taxable_value, gst_rate, cgst_amount, sgst_amount, igst_amount, line_total, sort_order)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-        [inv!.id, l.itemId, l.description, l.hsn, l.qty, l.rate, l.discountPct ?? 0,
-         toDecimalString(c.taxableValue), l.gstRate,
-         toDecimalString(c.cgst), toDecimalString(c.sgst), toDecimalString(c.igst),
-         toDecimalString(c.lineTotal), i],
-      );
-    }
+    await insertLines(tx, inv!.id, input, t);
     return { id: inv!.id };
+  }).catch((e) => { throw fromPgError(e); });
+}
+
+/**
+ * Full replace of a DRAFT invoice (the edit-and-retry rail: staff hits
+ * INSUFFICIENT_STOCK on submit, fixes the quantity, resubmits). The immutability
+ * triggers are the second line of defense; the FOR UPDATE + status check is the
+ * first. Submitted/cancelled invoices are never editable.
+ */
+export async function updateDraftInvoice(
+  id: string, input: CreateInvoiceInput, userId: string,
+): Promise<{ id: string }> {
+  return withTransaction(userId, async (tx) => {
+    const { rows: [existing] } = await tx.query<{ status: string }>(
+      `SELECT status FROM invoices WHERE id = $1 FOR UPDATE`, [id]);
+    if (!existing) throw new AppError("NOT_FOUND", "Invoice not found", 404);
+    if (existing.status !== "draft") {
+      throw new AppError("INVALID_STATE", `invoice is ${existing.status}, expected draft`, 409);
+    }
+
+    const { settings, customer, isInterState, t } = await prepareInvoice(tx, input);
+
+    await tx.query(`DELETE FROM invoice_lines WHERE invoice_id = $1`, [id]);
+    await tx.query(
+      `UPDATE invoices SET
+         customer_id = $2, source_warehouse_id = $3, company_gstin = $4, customer_gstin = $5,
+         place_of_supply = $6, is_inter_state = $7,
+         doc_date = COALESCE($8, doc_date), due_date = $9,
+         subtotal = $10, discount_total = $11, taxable_total = $12, cgst_total = $13,
+         sgst_total = $14, igst_total = $15, rounding_adjustment = $16, grand_total = $17
+       WHERE id = $1`,
+      [id, input.customerId, input.warehouseId, settings.gstin, customer.gstin,
+       input.placeOfSupply, isInterState, input.docDate ?? null, input.dueDate ?? null,
+       toDecimalString(t.subtotal), toDecimalString(t.discountTotal), toDecimalString(t.taxableTotal),
+       toDecimalString(t.cgstTotal), toDecimalString(t.sgstTotal), toDecimalString(t.igstTotal),
+       toDecimalString(t.roundingAdjustment), toDecimalString(t.grandTotal)],
+    );
+
+    await insertLines(tx, id, input, t);
+    return { id };
   }).catch((e) => { throw fromPgError(e); });
 }
 

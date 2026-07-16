@@ -45,12 +45,14 @@ export const CreateInvoice = z.object({
   customerId: z.string().uuid(),
   warehouseId: z.string().uuid(),
   placeOfSupply: z.string().length(2),
+  docDate: isoDate.optional(),     // back-entry from bill photos; server rejects future dates
   dueDate: isoDate.optional(),
   lines: z.array(z.object({
     itemId: z.string().uuid(),
     description: z.string().min(1),
     hsn: z.string().regex(/^[0-9]{4,8}$/),
     qty,
+    uom: z.string().min(1).optional(),
     rate: money,
     discountPct: z.number().min(0).max(100).optional(),
     gstRate: z.number(),
@@ -112,6 +114,89 @@ export interface DigestData {
 export interface Digest {
   text: string;             // WhatsApp-ready
   data: DigestData;
+}
+
+/** Item master row as returned by GET /api/inventory/items (pg numerics are strings). */
+export interface ItemOption {
+  id: string;
+  sku: string;
+  name: string;
+  description: string | null;
+  uom: string;
+  hsn_sac_code: string;
+  gst_rate: string;                       // "18.00"
+  is_stock_item: boolean;
+  standard_selling_rate: string | null;   // "12000.00"
+  on_hand: string;                        // summed qty across warehouses, "0" when none
+  is_active: boolean;
+}
+
+export interface WarehouseDto {
+  id: string;
+  name: string;
+}
+
+export interface CompanySettingsDto {
+  legal_name: string;
+  gstin: string | null;
+  state_code: string;
+  address: Record<string, unknown>;
+  invoice_terms: string | null;
+}
+
+export interface InvoiceLineDto {
+  id: string;
+  item_id: string | null;
+  description: string;
+  hsn_sac_code: string;
+  qty: string;
+  uom: string;
+  rate: string;
+  discount_pct: string;
+  taxable_value: string;
+  gst_rate: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  line_total: string;
+  sort_order: number;
+}
+
+/** GET /api/invoicing/invoices/:id — header + lines + parties, print-ready. */
+export interface InvoiceDetail {
+  id: string;
+  kind: string;
+  doc_no: string | null;
+  doc_date: string;                       // YYYY-MM-DD
+  status: string;
+  customer_id: string;
+  source_warehouse_id: string | null;
+  place_of_supply: string;
+  is_inter_state: boolean;
+  due_date: string | null;
+  company_gstin: string | null;
+  customer_gstin: string | null;
+  subtotal: string;
+  discount_total: string;
+  taxable_total: string;
+  cgst_total: string;
+  sgst_total: string;
+  igst_total: string;
+  rounding_adjustment: string;
+  grand_total: string;
+  amount_paid: string | null;
+  outstanding: string | null;
+  payment_status: string | null;
+  submitted_at: string | null;
+  created_at: string;
+  customer: {
+    name: string;
+    gstin: string | null;
+    state_code: string | null;
+    billing_address: Record<string, unknown>;
+  };
+  company: CompanySettingsDto;
+  lines: InvoiceLineDto[];
 }
 
 export interface InvoiceListRow {

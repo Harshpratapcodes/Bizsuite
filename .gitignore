@@ -32,3 +32,4 @@ frontend/dist/
 playwright-report/
 test-results/
 e2e/.seed.json
+.claude
