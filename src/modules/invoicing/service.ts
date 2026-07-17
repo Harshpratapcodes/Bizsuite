@@ -69,19 +69,21 @@ async function insertLines(
   }
 }
 
-export async function createDraftInvoice(input: CreateInvoiceInput, userId: string): Promise<{ id: string }> {
+export async function createDraftInvoice(
+  input: CreateInvoiceInput, userId: string, opts?: { quotationId?: string },
+): Promise<{ id: string }> {
   return withTransaction(userId, async (tx) => {
     const { settings, customer, isInterState, t } = await prepareInvoice(tx, input);
 
     const { rows: [inv] } = await tx.query<{ id: string }>(
       `INSERT INTO invoices
-         (kind, customer_id, source_warehouse_id, company_gstin, customer_gstin,
+         (kind, customer_id, source_warehouse_id, quotation_id, company_gstin, customer_gstin,
           place_of_supply, is_inter_state, doc_date, due_date,
           subtotal, discount_total, taxable_total, cgst_total, sgst_total, igst_total,
           rounding_adjustment, grand_total, created_by)
-       VALUES ('invoice', $1,$2,$3,$4,$5,$6,COALESCE($7,CURRENT_DATE),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       VALUES ('invoice', $1,$2,$3,$4,$5,$6,$7,COALESCE($8,CURRENT_DATE),$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        RETURNING id`,
-      [input.customerId, input.warehouseId, settings.gstin, customer.gstin,
+      [input.customerId, input.warehouseId, opts?.quotationId ?? null, settings.gstin, customer.gstin,
        input.placeOfSupply, isInterState, input.docDate ?? null, input.dueDate ?? null,
        toDecimalString(t.subtotal), toDecimalString(t.discountTotal), toDecimalString(t.taxableTotal),
        toDecimalString(t.cgstTotal), toDecimalString(t.sgstTotal), toDecimalString(t.igstTotal),

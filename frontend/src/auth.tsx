@@ -61,3 +61,8 @@ export function canEnterOpening(user: AuthUserDto | null): boolean {
 export function canCreateInvoice(user: AuthUserDto | null): boolean {
   return user?.roleName === "admin" || user?.roleName === "accounts" || user?.roleName === "sales";
 }
+
+/** Sales module (quotations) — seeded write+submit for admin, accounts, sales. */
+export function canCreateQuote(user: AuthUserDto | null): boolean {
+  return user?.roleName === "admin" || user?.roleName === "accounts" || user?.roleName === "sales";
+}

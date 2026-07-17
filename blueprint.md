@@ -148,14 +148,14 @@ Exit criteria: concurrent stock operations pass under load test; inventory valua
 ---
 
 ### Phase 4 — Sales, Invoicing & GST
-**Duration:** 4–5 weeks · **Status:** 🔲 Not started · **Target tag:** v0.5
+**Duration:** 4–5 weeks · **Status:** 🟡 In progress (quotation app + invoice rail built ahead) · **Target tag:** v0.5
 
 Goal: quotation → order → GST invoice → payment, fully posted. Highest-risk phase (tax correctness, not code).
 
 Tasks:
 - [~] Customer master (GSTIN, state code, billing/shipping) — *`crm/companies` CRUD service + routes already built (customer/supplier flags, gst_treatment, GSTIN validation, billing/shipping); UI pending*
-- [ ] Quotation builder (reuse QuoteFlow patterns where sensible)
-- [ ] Quotation → sale order conversion
+- [x] Quotation builder — *`sales` module (`quotations.service.ts` + routes) + quotation app UI (register, guided builder, server-computed review, print-CSS quotation). Non-posting: no journal, no stock. 27-assertion test suite green*
+- [x] Quotation → invoice conversion — *submitted quote → draft invoice, no re-entry, linked both ways (`quotations.converted_invoice_id` ↔ `invoices.quotation_id`), one-time (409 on re-convert). NB: no separate sale-order table in v1 — a quote converts directly to a draft invoice*
 - [ ] Invoice generation: CGST/SGST vs IGST by place-of-supply, HSN lines, rounding rules
 - [ ] Invoice → journal posting; invoice → stock deduction (single transaction)
 - [ ] Invoice PDF (GST-compliant format)
@@ -267,9 +267,10 @@ Anything tempting mid-build goes here, not into the current phase.
 **Active phase:** Approach A (khata rail first) per the approved design doc + eng review — see `~/.gstack/projects/bizsuite/harsh.singh-unknown-design-20260704-150804.md` (ends with the GSTACK review report, ENG CLEARED).
 **Built so far:** everything previously listed PLUS the **khata rail backend** (opening balances D3, payments, khata report, Friday digest, D4 grant, D6 router refactor, Neon support, CI workflow), the **operator SPA + contracts workspace (T6/T7)**, **Playwright E2E (T8)**, CLI user creation, and — new 2026-07-16 — the **guided invoice UI** (second half of Approach A): `/invoices/new` staff flow (customer/item pickers with live stock, place-of-supply defaulting, back-dated entry guarded to ≤ today), server-authoritative review screen (draft totals come from the persisted draft, zero client tax math), draft edit/resume via `PATCH` (`updateDraftInvoice`, the INSUFFICIENT_STOCK edit-and-retry rail), print-CSS tax invoice with amount-in-words, admin-only cancel with reversal wording; supporting endpoints (invoice detail with lines+parties, warehouses list, company settings) and masters `on_hand` in the item list. Also: pg pool hardened (bounded connect/query waits after an E2E trace caught a permanently hung Neon handshake), integration-test date-rot fix (hardcoded due date → computed).
 **UI (2026-07-17):** Bizesuite design system applied from the claude.ai/design import — home app-launcher (tinted tiles, live khata total, coming-soon tiles for Phases 2/3/5) + per-app workspace shell (topbar ⊞ switcher, per-app hue/tint CSS vars, section tabs, avatar menu), IBM Plex Sans/Mono + Bricolage Grotesque, design status pills, stage track on invoice records. Prototype-only features deliberately not built: Kanban, bulk delete (violates append-only), command palette, notification bell. E2E specs updated for launcher navigation.
-**Test status:** full suite green against Neon cloud Postgres (2026-07-17) — integration 25/25, khata 35/35, auth 14/14, rbac 18/18, masters 17/17, concurrency PASS, **Playwright E2E 8/8** (khata rail + invoice rail: golden journey, insufficient-stock retry, admin-only cancel, draft resume).
+**Quotation app (2026-07-17, pulled forward from Phase 4):** new `sales` module — the schema's pre-existing `quotations`/`quotation_lines` tables + `QTN-2026` sequence got a service (`createDraftQuotation`/`updateDraftQuotation`, non-posting `quotationLifecycle`, `convertQuotationToInvoice`), routes at `/api/sales/quotations` (guarded by the seeded `sales` matrix — write+submit for admin/accounts/sales, cancel admin-only), contracts (`CreateQuotation`/`ConvertQuotation` + DTOs), and a full app tile (register → guided builder → server-computed review → submit → print-CSS quotation → convert-to-invoice). Quotations move no stock and post no journal (grand total is the exact sum; rupee-rounding happens on the invoice). `createDraftInvoice` gained an optional `quotationId` so conversion links cleanly without a cross-module table write. Test suite: **quotations 27/27**.
+**Test status:** full suite green against Neon cloud Postgres (2026-07-17) — integration 25/25, khata 35/35, auth 14/14, rbac 18/18, masters 17/17, **quotations 27/27**, concurrency PASS, **Playwright E2E 8/8** (khata rail + invoice rail: golden journey, insufficient-stock retry, admin-only cancel, draft resume).
 **DB:** Neon (cloud) via `DATABASE_URL` in gitignored `.env`; schema loaded 2026-07-04.
 **Not yet built:** CA handshake + CSV export (T11 — **still blocks the first real system B2B invoice**), deploy/hardening (T12), restore drill (T10), admin UI for users/warehouses (SQL/CLI only today).
 **Real-world track:** Friday Pilot starts this week (probe question → top-15 debtors → bill photos → first digest). Staff hire needs owner/date/budget (D11).
-**Next action:** push to GitHub → CI green; then contracts workspace + SPA khata screens.
-**Last updated:** 2026-07-04 (khata rail slice committed)
+**Next action:** commit the pending design-system + quotation-app work → CI green; then deploy (Phase 1 bulk) + T11 CA handshake.
+**Last updated:** 2026-07-17 (quotation app — `sales` module + UI, pulled forward from Phase 4)

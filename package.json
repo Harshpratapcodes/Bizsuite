@@ -16,6 +16,7 @@
     "test:auth": "tsx test/auth.ts",
     "test:rbac": "tsx test/rbac.ts",
     "test:masters": "tsx test/masters.ts",
+    "test:quotations": "tsx test/quotations.ts",
     "test:khata": "tsx test/khata.ts",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit"

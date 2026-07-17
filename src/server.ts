@@ -13,6 +13,7 @@ import { itemsRouter } from "./modules/inventory/items.routes.js";
 import { warehousesRouter } from "./modules/inventory/warehouses.routes.js";
 import { companiesRouter } from "./modules/crm/companies.routes.js";
 import { invoicingRouter } from "./modules/invoicing/invoicing.routes.js";
+import { quotationsRouter } from "./modules/sales/quotations.routes.js";
 import { paymentsRouter } from "./modules/invoicing/payments.routes.js";
 import { accountingRouter } from "./modules/accounting/accounting.routes.js";
 
@@ -60,6 +61,7 @@ app.use("/api/inventory/items", itemsRouter);
 app.use("/api/inventory/warehouses", warehousesRouter);
 app.use("/api/crm/companies", companiesRouter);
 app.use("/api/invoicing/invoices", invoicingRouter);
+app.use("/api/sales/quotations", quotationsRouter);
 app.use("/api/invoicing/payments", paymentsRouter);
 app.use("/api/accounting", accountingRouter);
 

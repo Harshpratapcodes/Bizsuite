@@ -65,6 +65,9 @@ jobs:
       - name: Masters suite
         run: npm run test:masters
 
+      - name: Quotations suite
+        run: npm run test:quotations
+
       - name: Khata rail suite
         run: npm run test:khata
 

@@ -60,6 +60,37 @@ export const CreateInvoice = z.object({
 });
 export type CreateInvoiceInput = z.infer<typeof CreateInvoice>;
 
+// ---------------------------------------------------------------------------
+// Sales — quotations (non-posting: no journal, no stock, no warehouse)
+// ---------------------------------------------------------------------------
+export const CreateQuotation = z.object({
+  customerId: z.string().uuid(),
+  placeOfSupply: z.string().length(2),
+  docDate: isoDate.optional(),      // server rejects future dates, same as invoices
+  validUntil: isoDate.optional(),
+  terms: z.string().max(2000).optional(),
+  notes: z.string().max(2000).optional(),
+  lines: z.array(z.object({
+    itemId: z.string().uuid(),
+    description: z.string().min(1),
+    hsn: z.string().regex(/^[0-9]{4,8}$/),
+    qty,
+    uom: z.string().min(1).optional(),
+    rate: money,
+    discountPct: z.number().min(0).max(100).optional(),
+    gstRate: z.number(),
+  })).min(1),
+});
+export type CreateQuotationInput = z.infer<typeof CreateQuotation>;
+
+/** Convert a submitted quotation into a draft invoice; warehouse is needed
+ *  because invoices issue stock and quotations don't carry one. */
+export const ConvertQuotation = z.object({
+  warehouseId: z.string().uuid(),
+  dueDate: isoDate.optional(),
+});
+export type ConvertQuotationInput = z.infer<typeof ConvertQuotation>;
+
 export const CreatePayment = z.object({
   customerId: z.string().uuid(),
   amount: money,
@@ -211,6 +242,71 @@ export interface InvoiceListRow {
   amount_paid: string | null;
   outstanding: string | null;
   payment_status: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface QuotationLineDto {
+  id: string;
+  item_id: string | null;
+  description: string;
+  hsn_sac_code: string;
+  qty: string;
+  uom: string;
+  rate: string;
+  discount_pct: string;
+  taxable_value: string;
+  gst_rate: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  line_total: string;
+  sort_order: number;
+}
+
+/** GET /api/sales/quotations/:id — header + lines + parties, print-ready. */
+export interface QuotationDetail {
+  id: string;
+  doc_no: string | null;
+  doc_date: string;                       // YYYY-MM-DD
+  status: string;
+  customer_id: string;
+  place_of_supply: string;
+  is_inter_state: boolean;
+  valid_until: string | null;
+  terms: string | null;
+  notes: string | null;
+  subtotal: string;
+  discount_total: string;
+  taxable_total: string;
+  cgst_total: string;
+  sgst_total: string;
+  igst_total: string;
+  grand_total: string;
+  converted_invoice_id: string | null;
+  converted_invoice_no: string | null;
+  submitted_at: string | null;
+  created_at: string;
+  customer: {
+    name: string;
+    gstin: string | null;
+    state_code: string | null;
+    billing_address: Record<string, unknown>;
+  };
+  company: CompanySettingsDto;
+  lines: QuotationLineDto[];
+}
+
+export interface QuotationListRow {
+  id: string;
+  doc_no: string | null;
+  doc_date: string;
+  status: string;
+  customer_id: string;
+  customer_name: string;
+  valid_until: string | null;
+  grand_total: string;
+  converted_invoice_id: string | null;
   created_by: string | null;
   created_at: string;
 }
