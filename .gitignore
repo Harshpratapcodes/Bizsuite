@@ -33,3 +33,6 @@ playwright-report/
 test-results/
 e2e/.seed.json
 .claude
+
+# Local Claude instructions
+claude.md

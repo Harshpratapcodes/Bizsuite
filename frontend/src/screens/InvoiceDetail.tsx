@@ -89,7 +89,10 @@ export function InvoiceDetailScreen() {
             {" "}· {d.doc_date} · {d.customer.name}
           </p>
         </div>
-        <Link className="secondary btn-link" to="/invoices">← All invoices</Link>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+          <Link className="secondary btn-link" to="/invoices">← All invoices</Link>
+          {d.status !== "cancelled" && <StageTrack status={d.status} paymentStatus={d.payment_status} />}
+        </div>
       </div>
 
       {justSubmitted && (
@@ -234,6 +237,18 @@ export function InvoiceDetailScreen() {
 
       {d.status === "submitted" && <PrintSheet d={d} />}
     </>
+  );
+}
+
+/** Stage rail (Bizesuite design): Draft → Submitted → Paid. */
+function StageTrack({ status, paymentStatus }: { status: string; paymentStatus: string | null }) {
+  const idx = status === "draft" ? 0 : paymentStatus === "paid" ? 2 : 1;
+  return (
+    <div className="stage-track">
+      {["Draft", "Submitted", "Paid"].map((s, i) => (
+        <span key={s} className={`stage ${i === idx ? "current" : i < idx ? "past" : ""}`}>{s}</span>
+      ))}
+    </div>
   );
 }
 

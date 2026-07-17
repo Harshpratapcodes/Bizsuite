@@ -32,22 +32,29 @@ async function login(page: Page, email: string, password: string): Promise<void>
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Log in" }).click();
-  await expect(page.getByRole("link", { name: "Khata (dues)" })).toBeVisible();
+  // Login lands on the home launcher (Bizesuite design): app tiles.
+  await expect(page.getByRole("link", { name: "Khata", exact: true })).toBeVisible();
+}
+
+/** Jump between apps the design way: ⊞ click → all-apps home → tile. */
+async function switchApp(page: Page, appName: string): Promise<void> {
+  await page.getByRole("button", { name: "All apps" }).click();
+  await page.getByRole("link", { name: appName, exact: true }).click();
 }
 
 /** customer → item(s) on the guided entry screen, up to "Save draft & review". */
 async function startInvoice(page: Page, itemName: string, qty: string): Promise<void> {
-  await page.getByRole("link", { name: "New sale (invoice)" }).click();
+  await page.getByRole("link", { name: "Invoicing", exact: true }).click();
+  await page.getByRole("link", { name: "New sale", exact: true }).click();
   await page.getByLabel("Search customer").fill(seed.invoiceCustomer.name.slice(0, 14));
   await page.getByText(seed.invoiceCustomer.name, { exact: true }).click();
 
   // place of supply defaulted from the customer's state → intra-state hint
   await expect(page.getByText("CGST + SGST")).toBeVisible();
 
-  // test DBs accumulate warehouses from other suites; pick the seeded one when
-  // the selector is shown (a single-warehouse install auto-picks it silently)
-  const wh = page.locator("#wh");
-  if (await wh.isVisible()) await wh.selectOption({ label: seed.warehouse.name });
+  // test DBs accumulate warehouses from other suites — always pick the seeded
+  // one. selectOption auto-waits for the select to render, unlike isVisible().
+  await page.locator("#wh").selectOption({ label: seed.warehouse.name });
 
   await page.getByLabel("Search item").fill(itemName.slice(0, 18));
   await page.getByText(itemName, { exact: false }).first().click();
@@ -82,7 +89,7 @@ test("golden journey: staff invoices 2 UPS, server totals shown, khata updates",
   await expect(page.getByRole("button", { name: /Cancel invoice/ })).toHaveCount(0);
 
   // khata reflects the sale
-  await page.getByRole("link", { name: "Khata (dues)" }).click();
+  await switchApp(page, "Khata");
   await expect(page.getByRole("row", { name: new RegExp(seed.invoiceCustomer.name) }))
     .toContainText("₹28,320.00");
 });
@@ -114,14 +121,14 @@ test("insufficient stock: plain-language error, edit draft, retry succeeds", asy
   await expect(page.getByRole("status")).toContainText(/INV-2026-\d{5}/);
 
   // khata now carries both invoices: 28,320 + 10,620
-  await page.getByRole("link", { name: "Khata (dues)" }).click();
+  await switchApp(page, "Khata");
   await expect(page.getByRole("row", { name: new RegExp(seed.invoiceCustomer.name) }))
     .toContainText("₹38,940.00");
 });
 
 test("cancel is admin-only: staff has no cancel button, admin does", async ({ page }) => {
   await login(page, seed.admin.email, seed.admin.password);
-  await page.getByRole("link", { name: "Invoices", exact: true }).click();
+  await page.getByRole("link", { name: "Invoicing", exact: true }).click();
   await page.getByRole("row", { name: new RegExp(seed.invoiceCustomer.name) }).first().click();
   await expect(page.getByRole("button", { name: /Cancel invoice/ })).toBeVisible();
   // visibility only — cancelling would disturb the khata totals above
@@ -134,10 +141,10 @@ test("draft survives and resumes from the invoice list", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Review draft invoice" })).toBeVisible();
 
   // walk away mid-entry…
-  await page.getByRole("link", { name: "Khata (dues)" }).click();
+  await switchApp(page, "Khata");
 
   // …and resume from the list: Drafts filter → row → review screen
-  await page.getByRole("link", { name: "Invoices", exact: true }).click();
+  await switchApp(page, "Invoicing");
   await page.getByLabel("Show").selectOption("draft");
   await page.getByRole("row", { name: new RegExp(seed.invoiceCustomer.name) }).first().click();
   await expect(page.getByRole("heading", { name: "Review draft invoice" })).toBeVisible();

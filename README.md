@@ -27,10 +27,12 @@ design→built), `schema.sql`.
   invoice detail endpoint (header + lines + parties, print-ready), and the
   **reference lifecycle**: submit = lock → number → sales journal →
   stock issues → COGS journal in one transaction; cancel = full reversal
-- **frontend/** — operator SPA (staff-usable bar): khata, payments, opening
-  balances, invoice register, and the **guided invoice flow** — new sale →
-  server-computed review → submit → print-CSS tax invoice; drafts resume from
-  the register; INSUFFICIENT_STOCK surfaces in plain language with edit-and-retry
+- **frontend/** — operator SPA (staff-usable bar, Bizesuite design system):
+  Odoo-style **home launcher** + per-app workspace shell (topbar app switcher,
+  per-app hues); khata, payments, opening balances, invoice register, and the
+  **guided invoice flow** — new sale → server-computed review → submit →
+  print-CSS tax invoice; drafts resume from the register; INSUFFICIENT_STOCK
+  surfaces in plain language with edit-and-retry
 - **server.ts** — Express app: auth routes, masters routes, and the invoice
   lifecycle, all zod-validated and behind `requireAuth` + `requirePermission`
 

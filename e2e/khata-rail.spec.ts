@@ -23,7 +23,14 @@ async function login(page: Page, email: string, password: string): Promise<void>
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Log in" }).click();
-  await expect(page.getByRole("link", { name: "Khata (dues)" })).toBeVisible();
+  // Login lands on the home launcher (Bizesuite design): app tiles.
+  await expect(page.getByRole("link", { name: "Khata", exact: true })).toBeVisible();
+}
+
+/** Jump between apps the design way: ⊞ click → all-apps home → tile. */
+async function switchApp(page: Page, appName: string): Promise<void> {
+  await page.getByRole("button", { name: "All apps" }).click();
+  await page.getByRole("link", { name: appName, exact: true }).click();
 }
 
 test("wrong password shows a plain-language error, no navigation", async ({ page }) => {
@@ -38,6 +45,7 @@ test("wrong password shows a plain-language error, no navigation", async ({ page
 test("staff does not see Opening balances; admin does", async ({ page }) => {
   await login(page, seed.counter.email, seed.counter.password);
   await expect(page.getByRole("link", { name: "Opening balances" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Account" }).click();
   await page.getByRole("button", { name: "Log out" }).click();
   await expect(page.getByRole("button", { name: "Log in" })).toBeVisible();
 
@@ -49,12 +57,12 @@ test("golden journey: staff records a payment, khata updates", async ({ page }) 
   await login(page, seed.counter.email, seed.counter.password);
 
   // Khata shows the seeded opening balance first
-  await page.getByRole("link", { name: "Khata (dues)" }).click();
+  await page.getByRole("link", { name: "Khata", exact: true }).click();
   const row = page.getByRole("row", { name: new RegExp(seed.customer.name) });
   await expect(row).toContainText("₹30,000.00");
 
-  // Guided payment entry
-  await page.getByRole("link", { name: "Payment received" }).click();
+  // Guided payment entry (Payments app via the switcher)
+  await switchApp(page, "Payments");
   await page.getByLabel("Search customer").fill(seed.customer.name.slice(0, 12));
   await page.getByText(seed.customer.name, { exact: true }).click();
   await page.getByLabel(/Amount received/).fill("5000.00");
@@ -69,14 +77,14 @@ test("golden journey: staff records a payment, khata updates", async ({ page }) 
   await expect(banner).toContainText(/PAY-2026-\d{5}/);
 
   // Khata reflects the payment
-  await page.getByRole("link", { name: "Khata (dues)" }).click();
+  await switchApp(page, "Khata");
   await expect(page.getByRole("row", { name: new RegExp(seed.customer.name) }))
     .toContainText("₹25,000.00");
 });
 
 test("on-account note appears when customer has no open bills", async ({ page }) => {
   await login(page, seed.counter.email, seed.counter.password);
-  await page.getByRole("link", { name: "Payment received" }).click();
+  await page.getByRole("link", { name: "Payments", exact: true }).click();
   await page.getByLabel("Search customer").fill(seed.customer.name.slice(0, 12));
   await page.getByText(seed.customer.name, { exact: true }).click();
   await expect(page.getByText(/No open bills/)).toBeVisible();

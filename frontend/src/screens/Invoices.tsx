@@ -74,6 +74,12 @@ export function InvoicesScreen() {
             </tbody>
           </table>
         )}
+        {invoices.data && invoices.data.length > 0 && (
+          <div className="table-foot">
+            {invoices.data.length} {invoices.data.length === 1 ? "record" : "records"}
+            {status ? ` · ${status.replace("_", " ")}` : ""}
+          </div>
+        )}
       </div>
     </>
   );

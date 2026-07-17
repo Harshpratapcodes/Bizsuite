@@ -210,7 +210,7 @@ export function InvoiceNewScreen() {
                 </div>
               )}
             </div>
-            {(warehouses.data?.length ?? 0) > 1 && (
+            {(warehouses.data?.length ?? 0) > 0 && (
               <div>
                 <label htmlFor="wh">From warehouse</label>
                 <select id="wh" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
