@@ -58,6 +58,7 @@ const FRIENDLY: Record<string, string> = {
   ALREADY_ORDERED: "This quotation already has a sales order.",
   ALREADY_BILLED: "This sales order has already been invoiced.",
   HAS_INVOICES: "Cancel the invoices raised against this order first.",
+  PERIOD_CLOSED: "That accounting period is closed. Use a different date, or ask an admin to reopen it.",
   INVALID_DATE: "The invoice date cannot be in the future.",
   NOT_CONFIGURED: "Company details are not set up yet. Ask the admin to fill in company settings.",
   IMMUTABLE: "This document is locked after submission. Corrections need an admin reversal.",

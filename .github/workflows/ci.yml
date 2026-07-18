@@ -74,6 +74,12 @@ jobs:
       - name: Accounting suite
         run: npm run test:accounting
 
+      - name: Journal entries suite
+        run: npm run test:journals
+
+      - name: Financial periods suite
+        run: npm run test:periods
+
       - name: Khata rail suite
         run: npm run test:khata
 

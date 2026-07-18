@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { useAuth, canEnterOpening, canCreateInvoice, canCreateQuote, canCreateSalesOrder } from "./auth";
+import { useAuth, canEnterOpening, canCreateInvoice, canCreateQuote, canCreateSalesOrder, canManageAccounts } from "./auth";
 import { LoginScreen } from "./screens/Login";
 import { HomeScreen } from "./screens/Home";
 import { Workspace } from "./components/Workspace";
@@ -18,6 +18,10 @@ import { SalesOrderDetailScreen } from "./screens/SalesOrderDetail";
 import { ChartOfAccountsScreen } from "./screens/ChartOfAccounts";
 import { TrialBalanceScreen } from "./screens/TrialBalance";
 import { GeneralLedgerScreen } from "./screens/GeneralLedger";
+import { JournalEntriesScreen } from "./screens/JournalEntries";
+import { JournalEntryNewScreen } from "./screens/JournalEntryNew";
+import { JournalEntryDetailScreen } from "./screens/JournalEntryDetail";
+import { FinancialPeriodsScreen } from "./screens/FinancialPeriods";
 
 /**
  * Shell (Bizesuite design): "/" is the home launcher; every module screen
@@ -50,6 +54,10 @@ export function App() {
         <Route path="/accounting" element={<ChartOfAccountsScreen />} />
         <Route path="/accounting/trial-balance" element={<TrialBalanceScreen />} />
         <Route path="/accounting/ledger/:id" element={<GeneralLedgerScreen />} />
+        <Route path="/accounting/journals" element={<JournalEntriesScreen />} />
+        {canManageAccounts(user) && <Route path="/accounting/journals/new" element={<JournalEntryNewScreen />} />}
+        <Route path="/accounting/journals/:id" element={<JournalEntryDetailScreen />} />
+        <Route path="/accounting/periods" element={<FinancialPeriodsScreen />} />
         {canEnterOpening(user) && <Route path="/opening-balances" element={<OpeningBalanceScreen />} />}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

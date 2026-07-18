@@ -20,6 +20,8 @@ export function fromPgError(err: unknown): AppError {
       return new AppError("UNKNOWN_SERIES", e.message ?? "Unknown document series", 500);
     case "P0001":
       return new AppError("IMMUTABLE", e.message ?? "Record is immutable", 409);
+    case "P0004":
+      return new AppError("PERIOD_CLOSED", e.message ?? "Accounting period is closed", 422);
     case "23514":
       return new AppError("CONSTRAINT_VIOLATION", e.message ?? "Constraint violation", 422);
     default:

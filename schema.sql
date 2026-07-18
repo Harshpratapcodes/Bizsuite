@@ -505,6 +505,47 @@ CREATE CONSTRAINT TRIGGER trg_je_balanced
   FOR EACH ROW WHEN (NEW.status = 'posted')
   EXECUTE FUNCTION fn_je_balanced();
 
+-- ---------------------------------------------------------------------------
+-- Financial periods (ERPNext accounting_period): a closed period blocks any
+-- journal entry dated inside it. Enforced by ONE trigger on journal_entries,
+-- so every posting path (manual, invoice, payment, opening, reversal) is
+-- covered. Balances stay derived; this only gates NEW postings.
+-- ---------------------------------------------------------------------------
+CREATE TABLE financial_periods (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        text NOT NULL UNIQUE,                 -- e.g. 'Apr 2026'
+  start_date  date NOT NULL,
+  end_date    date NOT NULL,
+  status      text NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed')),
+  closed_by   uuid REFERENCES users(id),
+  closed_at   timestamptz,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT period_dates       CHECK (end_date >= start_date),
+  CONSTRAINT closed_needs_stamp CHECK (status = 'open' OR closed_at IS NOT NULL)
+);
+CREATE INDEX idx_periods_range ON financial_periods(start_date, end_date);
+CREATE TRIGGER trg_periods_updated BEFORE UPDATE ON financial_periods
+  FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_periods_audit AFTER INSERT OR UPDATE OR DELETE ON financial_periods
+  FOR EACH ROW EXECUTE FUNCTION fn_audit();
+
+-- Custom SQLSTATE P0004 so the app maps it to PERIOD_CLOSED (a plain RAISE
+-- would collide with P0001/IMMUTABLE).
+CREATE OR REPLACE FUNCTION fn_posting_period_open() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM financial_periods
+              WHERE status = 'closed'
+                AND NEW.posting_date BETWEEN start_date AND end_date) THEN
+    RAISE EXCEPTION USING ERRCODE = 'P0004',
+      MESSAGE = format('Accounting period covering %s is closed', NEW.posting_date);
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER trg_je_period_open BEFORE INSERT ON journal_entries
+  FOR EACH ROW EXECUTE FUNCTION fn_posting_period_open();
+
 -- ============================================================================
 -- SECTION 6: SALES — quotations, invoices, payments
 -- ============================================================================
@@ -1217,6 +1258,13 @@ INSERT INTO accounts (code, name, type, is_group, system_key, parent_id) VALUES
   ('5300', 'Rent',                      'expense', false, NULL,              (SELECT id FROM accounts WHERE code='5000')),
   ('5400', 'Salaries',                  'expense', false, NULL,              (SELECT id FROM accounts WHERE code='5000')),
   ('5500', 'Office & Misc Expenses',    'expense', false, NULL,              (SELECT id FROM accounts WHERE code='5000'));
+
+-- The 12 monthly periods of FY 2026-27 (matches company_settings default start).
+INSERT INTO financial_periods (name, start_date, end_date)
+SELECT to_char(m, 'Mon YYYY'),
+       m::date,
+       (m + interval '1 month' - interval '1 day')::date
+  FROM generate_series(date '2026-04-01', date '2027-03-01', interval '1 month') AS m;
 
 COMMIT;
 

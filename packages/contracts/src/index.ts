@@ -193,6 +193,68 @@ export interface GeneralLedgerDto {
   closing: string;
 }
 
+// Manual journal entries (ERPNext Journal Entry)
+export const CreateJournalEntry = z.object({
+  postingDate: isoDate.optional(),
+  narration: z.string().min(1).max(500),
+  lines: z.array(z.object({
+    accountId: z.string().uuid(),
+    debit: money,                       // "0" on a credit line
+    credit: money,                      // "0" on a debit line
+    partyType: z.enum(["customer", "supplier"]).optional(),
+    partyId: z.string().uuid().optional(),
+    remarks: z.string().max(200).optional(),
+  })).min(2),
+});
+export type CreateJournalEntryInput = z.infer<typeof CreateJournalEntry>;
+
+export interface JournalEntryListRow {
+  id: string;
+  entry_no: string | null;
+  posting_date: string;
+  narration: string | null;
+  total: string;
+  is_reversal: boolean;
+  reversed: boolean;
+  posted_at: string | null;
+}
+export interface JournalLineDto {
+  account_id: string;
+  account_code: string;
+  account_name: string;
+  debit: string;
+  credit: string;
+  party_type: string | null;
+  party_name: string | null;
+  remarks: string | null;
+}
+export interface JournalEntryDetail {
+  id: string;
+  entry_no: string | null;
+  posting_date: string;
+  narration: string | null;
+  status: string;
+  voucher_type: string;
+  reverses_id: string | null;
+  reverses_entry_no: string | null;
+  reversed_by_entry_no: string | null;
+  reversed_by_id: string | null;
+  posted_at: string | null;
+  created_at: string;
+  lines: JournalLineDto[];
+}
+
+export interface FinancialPeriodDto {
+  id: string;
+  name: string;
+  start_date: string;
+  end_date: string;
+  status: string;                 // open | closed
+  closed_by_name: string | null;
+  closed_at: string | null;
+  is_current: boolean;
+}
+
 export const OpeningBalance = z.object({
   customerId: z.string().uuid(),
   amount: money,

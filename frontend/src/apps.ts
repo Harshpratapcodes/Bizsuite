@@ -75,7 +75,9 @@ export function tabsForApp(app: AppDef, user: AuthUserDto | null): { name: strin
   if (app.id === "accounting") {
     return [
       { name: "Chart of accounts", to: "/accounting", end: true },
+      { name: "Journal entries", to: "/accounting/journals" },
       { name: "Trial balance", to: "/accounting/trial-balance" },
+      { name: "Financial periods", to: "/accounting/periods" },
     ];
   }
   return [];
