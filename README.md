@@ -15,7 +15,11 @@ design→built), `schema.sql`.
   (`requirePermission` guard over the seeded 5-role `role_permissions` matrix)
 - **modules/accounting** — `postJournal` (draft→lines→posted, app-level balance
   assert + DB deferred trigger), `reverseJournal` (original stays posted;
-  original + reversal net to zero)
+  original + reversal net to zero); **chart of accounts** (`accounts.service.ts`
+  — ERPNext Account model: tree, root_type→report_type, group rollup, balances
+  derived from posted lines; create/archive with system-account guards) and the
+  ledger reports **trial balance** (nets to a balanced grand total) and
+  **general ledger** (opening → running → closing per account)
 - **modules/inventory** — `lockStock` (ordered FOR UPDATE = the concurrency
   control point), `issueStock`, `receiveStock` (moving-average revaluation);
   `items` master (CRUD service + routes: SKU, HSN/SAC, GST rate, reorder level)
@@ -60,6 +64,7 @@ PGDATABASE=bizsuite npm run test:rbac           # role_permissions + route guard
 PGDATABASE=bizsuite npm run test:masters        # items & companies CRUD + RBAC
 PGDATABASE=bizsuite npm run test:quotations     # quotation lifecycle + convert + RBAC
 PGDATABASE=bizsuite npm run test:sales-orders    # sales order lifecycle + billing + RBAC
+PGDATABASE=bizsuite npm run test:accounting      # chart of accounts + trial balance + GL
 PGDATABASE=bizsuite npx tsx test/concurrency.ts # 5 parallel sales, 1 unit, 1 winner
 PGDATABASE=bizsuite npm run dev                 # API on :3000
 ```
@@ -82,12 +87,16 @@ PGDATABASE=bizsuite npm run dev                 # API on :3000
   immutable-after-submit, SO → draft invoice link, **derived billing status**
   (Not/Fully Billed from submitted invoices), one-time billing, cancel blocked
   once invoiced, admin-only cancel
+- **accounting: 17/17** — chart-of-accounts tree, create with inherited root
+  type, archive guards (system account 409, non-group parent 422), **trial
+  balance balances** (grand debit == grand credit), general ledger for the
+  Debtors control account, RBAC
 - **Playwright E2E 8/8** (`npm run test:e2e`, real SPA + real DB): khata rail
   (golden payment journey, role gating) + invoice rail (guided invoice → server
   totals → submit → khata; insufficient-stock edit-and-retry; admin-only
   cancel; draft resume from the register)
 
-CI: `.github/workflows/ci.yml` runs typecheck + all eight suites against a
+CI: `.github/workflows/ci.yml` runs typecheck + all nine suites against a
 Postgres 16 service on every push/PR.
 
 ## Environment

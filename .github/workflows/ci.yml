@@ -71,6 +71,9 @@ jobs:
       - name: Sales orders suite
         run: npm run test:sales-orders
 
+      - name: Accounting suite
+        run: npm run test:accounting
+
       - name: Khata rail suite
         run: npm run test:khata
 

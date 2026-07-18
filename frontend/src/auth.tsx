@@ -55,6 +55,11 @@ export function canEnterOpening(user: AuthUserDto | null): boolean {
   return user?.roleName === "admin" || user?.roleName === "accounts";
 }
 
+/** Accounting write (create/archive accounts) — admin + accounts per the matrix. */
+export function canManageAccounts(user: AuthUserDto | null): boolean {
+  return user?.roleName === "admin" || user?.roleName === "accounts";
+}
+
 /** Mirrors the seeded role matrix: invoicing write+submit for admin, accounts,
  *  and counter staff ('sales', per eng review D4). Server enforces; this only
  *  hides screens a role could never use. */

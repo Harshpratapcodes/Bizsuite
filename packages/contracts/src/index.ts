@@ -141,8 +141,58 @@ export const CreatePayment = z.object({
 export type CreatePaymentInput = z.infer<typeof CreatePayment>;
 
 // ---------------------------------------------------------------------------
-// Accounting
+// Accounting — chart of accounts + ledger reports
 // ---------------------------------------------------------------------------
+export const CreateAccount = z.object({
+  parentId: z.string().uuid(),          // child inherits the parent's root type
+  code: z.string().min(1).max(20),
+  name: z.string().min(1).max(120),
+  isGroup: z.boolean().optional(),
+});
+export type CreateAccountInput = z.infer<typeof CreateAccount>;
+
+export interface AccountNodeDto {
+  id: string;
+  code: string;
+  name: string;
+  rootType: "asset" | "liability" | "equity" | "income" | "expense";
+  reportType: string;                   // Balance Sheet | Profit and Loss
+  normalSide: string;                   // debit | credit
+  isGroup: boolean;
+  isActive: boolean;
+  systemKey: string | null;
+  parentId: string | null;
+  balance: string;                      // signed, debit-positive
+}
+
+export interface TrialBalanceRowDto { code: string; name: string; rootType: string; debit: string; credit: string; }
+export interface TrialBalanceDto {
+  asOf: string | null;
+  rows: TrialBalanceRowDto[];
+  totalDebit: string;
+  totalCredit: string;
+  balanced: boolean;
+}
+
+export interface GeneralLedgerRowDto {
+  postingDate: string;
+  entryNo: string | null;
+  voucherType: string;
+  narration: string | null;
+  party: string | null;
+  debit: string;
+  credit: string;
+  balance: string;
+}
+export interface GeneralLedgerDto {
+  account: { id: string; code: string; name: string; rootType: string; normalSide: string };
+  from: string | null;
+  to: string | null;
+  opening: string;
+  rows: GeneralLedgerRowDto[];
+  closing: string;
+}
+
 export const OpeningBalance = z.object({
   customerId: z.string().uuid(),
   amount: money,

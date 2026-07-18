@@ -15,6 +15,9 @@ import { QuotationDetailScreen } from "./screens/QuotationDetail";
 import { SalesOrdersScreen } from "./screens/SalesOrders";
 import { SalesOrderNewScreen } from "./screens/SalesOrderNew";
 import { SalesOrderDetailScreen } from "./screens/SalesOrderDetail";
+import { ChartOfAccountsScreen } from "./screens/ChartOfAccounts";
+import { TrialBalanceScreen } from "./screens/TrialBalance";
+import { GeneralLedgerScreen } from "./screens/GeneralLedger";
 
 /**
  * Shell (Bizesuite design): "/" is the home launcher; every module screen
@@ -44,6 +47,9 @@ export function App() {
         {canCreateSalesOrder(user) && <Route path="/sales-orders/new" element={<SalesOrderNewScreen />} />}
         {canCreateSalesOrder(user) && <Route path="/sales-orders/:id/edit" element={<SalesOrderNewScreen />} />}
         <Route path="/sales-orders/:id" element={<SalesOrderDetailScreen />} />
+        <Route path="/accounting" element={<ChartOfAccountsScreen />} />
+        <Route path="/accounting/trial-balance" element={<TrialBalanceScreen />} />
+        <Route path="/accounting/ledger/:id" element={<GeneralLedgerScreen />} />
         {canEnterOpening(user) && <Route path="/opening-balances" element={<OpeningBalanceScreen />} />}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

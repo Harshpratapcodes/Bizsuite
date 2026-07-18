@@ -32,7 +32,7 @@ export const APPS: AppDef[] = [
   { id: "opening", name: "Opening balances", glyph: "Σ", hue: "#7E4A8E", tint: "#F2E9F4",
     path: "/opening-balances", desc: "Go-live setup (admin)", visible: canEnterOpening },
   { id: "accounting", name: "Accounting", glyph: "◫", hue: "#5C6B7A", tint: "#ECEFF2",
-    path: "", desc: "Phase 2", soon: true },
+    path: "/accounting", desc: "Chart of accounts, trial balance, ledger" },
   { id: "inventory", name: "Inventory", glyph: "▦", hue: "#C77D0A", tint: "#FAF0DD",
     path: "", desc: "Phase 3", soon: true },
   { id: "crm", name: "CRM", glyph: "◎", hue: "#4A6B8A", tint: "#E7EEF3",
@@ -50,6 +50,7 @@ export function appForPath(pathname: string): AppDef {
   if (pathname.startsWith("/sales-orders")) return byId("salesorders");
   if (pathname.startsWith("/invoices")) return byId("invoicing");
   if (pathname.startsWith("/payments")) return byId("payments");
+  if (pathname.startsWith("/accounting")) return byId("accounting");
   if (pathname.startsWith("/opening-balances")) return byId("opening");
   return byId("khata");
 }
@@ -70,6 +71,12 @@ export function tabsForApp(app: AppDef, user: AuthUserDto | null): { name: strin
     return canCreateInvoice(user)
       ? [{ name: "Invoices", to: "/invoices", end: true }, { name: "New sale", to: "/invoices/new" }]
       : [{ name: "Invoices", to: "/invoices", end: true }];
+  }
+  if (app.id === "accounting") {
+    return [
+      { name: "Chart of accounts", to: "/accounting", end: true },
+      { name: "Trial balance", to: "/accounting/trial-balance" },
+    ];
   }
   return [];
 }
