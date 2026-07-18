@@ -26,7 +26,7 @@ export function QuotationsScreen() {
       <div className="page-head">
         <div>
           <h1>Quotations</h1>
-          <p className="sub">Estimates for customers. Submit to lock the number, then convert to an invoice when the order is confirmed.</p>
+          <p className="sub">Estimates for customers. Submit to lock the number, then convert to a sales order when the customer confirms.</p>
         </div>
         {canCreateQuote(user) && (
           <Link className="btn-link" to="/quotations/new">＋ New quotation</Link>
@@ -66,8 +66,8 @@ export function QuotationsScreen() {
                   <td className="num">{inr(r.grand_total)}</td>
                   <td>{r.valid_until ?? "—"}</td>
                   <td>
-                    {r.converted_invoice_id
-                      ? <span className="badge paid">converted</span>
+                    {r.sales_order_id
+                      ? <span className="badge paid">ordered</span>
                       : <span className={`badge ${r.status}`}>{r.status}</span>}
                   </td>
                 </tr>

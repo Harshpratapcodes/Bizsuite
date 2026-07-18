@@ -36,9 +36,7 @@ async function main() {
   const [item] = await q<{ id: string }>(
     `INSERT INTO items (sku, name, hsn_sac_code, gst_rate)
      VALUES ('QT-' || substr(gen_random_uuid()::text,1,8), 'Stabiliser', '8504', 18) RETURNING id`);
-  const [wh] = await q<{ id: string }>(
-    `INSERT INTO warehouses (name) VALUES ('QT-WH-' || gen_random_uuid()) RETURNING id`);
-  const custId = customer!.id, itemId = item!.id, whId = wh!.id;
+  const custId = customer!.id, itemId = item!.id;
 
   await createUser({ email: `q_admin_${stamp}@test.com`, fullName: "Admin", password: "Pw!", roleName: "admin" });
   await createUser({ email: `q_sales_${stamp}@test.com`, fullName: "Sales", password: "Pw!", roleName: "sales" });
@@ -124,27 +122,27 @@ async function main() {
     });
     check("edit after submit -> 409", editAfter.status === 409, String(editAfter.status));
 
-    console.log("== CONVERT (sales) -> draft invoice, linked both ways ==");
+    console.log("== CONVERT (sales) -> draft SALES ORDER, linked ==");
     const convRes = await fetch(`${base}/api/sales/quotations/${quote.id}/convert`, {
-      method: "POST", ...j(sales, { warehouseId: whId }),
+      method: "POST", ...j(sales, {}),
     });
     check("convert -> 201", convRes.status === 201, String(convRes.status));
-    const { invoiceId } = await convRes.json() as { invoiceId: string };
-    check("invoice id returned", !!invoiceId);
-    const [inv] = await q<{ status: string; grand_total: string; quotation_id: string | null }>(
-      `SELECT status, grand_total::text, quotation_id FROM invoices WHERE id = $1`, [invoiceId]);
-    check("invoice is a draft", inv!.status === "draft", inv!.status);
-    check("invoice grand total = 3540.00 (carried from quote)", inv!.grand_total === "3540.00", inv!.grand_total);
-    check("invoice links back to the quotation", inv!.quotation_id === quote.id, inv!.quotation_id ?? "null");
+    const { salesOrderId } = await convRes.json() as { salesOrderId: string };
+    check("sales order id returned", !!salesOrderId);
+    const [so] = await q<{ status: string; grand_total: string; quotation_id: string | null }>(
+      `SELECT status, grand_total::text, quotation_id FROM sales_orders WHERE id = $1`, [salesOrderId]);
+    check("sales order is a draft", so!.status === "draft", so!.status);
+    check("SO grand total = 3540.00 (carried from quote)", so!.grand_total === "3540.00", so!.grand_total);
+    check("SO links back to the quotation", so!.quotation_id === quote.id, so!.quotation_id ?? "null");
     const convDetail = await (await fetch(`${base}/api/sales/quotations/${quote.id}`, { headers: { cookie: sales } }))
       .json() as Record<string, string>;
-    check("quotation stamped with converted_invoice_id", convDetail.converted_invoice_id === invoiceId,
-      convDetail.converted_invoice_id ?? "null");
+    check("quotation shows linked sales_order_id", convDetail.sales_order_id === salesOrderId,
+      convDetail.sales_order_id ?? "null");
 
     const convAgain = await fetch(`${base}/api/sales/quotations/${quote.id}/convert`, {
-      method: "POST", ...j(sales, { warehouseId: whId }),
+      method: "POST", ...j(sales, {}),
     });
-    check("second convert -> 409 (already converted)", convAgain.status === 409, String(convAgain.status));
+    check("second convert -> 409 (already ordered)", convAgain.status === 409, String(convAgain.status));
 
     console.log("== CANCEL is admin-only ==");
     // fresh quote to cancel

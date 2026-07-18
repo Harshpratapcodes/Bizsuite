@@ -27,19 +27,26 @@ design→built), `schema.sql`.
   invoice detail endpoint (header + lines + parties, print-ready), and the
   **reference lifecycle**: submit = lock → number → sales journal →
   stock issues → COGS journal in one transaction; cancel = full reversal
-- **modules/sales** — `quotations` (non-posting): `createDraftQuotation`,
-  `updateDraftQuotation`, a no-op submit/cancel `quotationLifecycle` (issues the
-  `QTN-2026` number, freezes lines, but touches no ledger or stock), and
-  `convertQuotationToInvoice` (submitted quote → draft invoice, linked both
-  ways, one-time). Reuses the invoicing GST math; grand total is the exact sum
+- **modules/sales** — the ERPNext/Odoo standard chain
+  **quotation → sales order → invoice** (all non-posting until the invoice):
+  - `quotations`: `createDraftQuotation`/`updateDraftQuotation`, a no-op
+    submit/cancel `quotationLifecycle` (issues `QTN-2026`, freezes lines, touches
+    no ledger or stock); grand total is the exact sum (estimate)
+  - `sales_orders`: `createDraftSalesOrder`/`updateDraftSalesOrder`,
+    `salesOrderLifecycle` (issues `SO-2026`; cancel blocked once invoiced),
+    `createSalesOrderFromQuotation` (quote → draft SO, no re-entry) and
+    `createInvoiceFromSalesOrder` (SO → draft invoice via `createDraftInvoice`,
+    linked by `invoices.sales_order_id`). Rounds to the rupee; **billing status
+    is derived** from the submitted invoices raised against the order
+  - reuses the invoicing GST math (`computeGst`)
 - **frontend/** — operator SPA (staff-usable bar, Bizesuite design system):
   Odoo-style **home launcher** + per-app workspace shell (topbar app switcher,
   per-app hues); khata, payments, opening balances, invoice register, and the
   **guided invoice flow** — new sale → server-computed review → submit →
   print-CSS tax invoice; drafts resume from the register; INSUFFICIENT_STOCK
-  surfaces in plain language with edit-and-retry. Plus the **quotation app** —
-  register → guided builder → server-computed review → submit → print-CSS
-  quotation → one-click convert to a draft invoice
+  surfaces in plain language with edit-and-retry. Plus the **quotation** and
+  **sales order** apps — register → guided builder → server-computed review →
+  submit → print-CSS document → convert down the chain (quote → order → invoice)
 - **server.ts** — Express app: auth routes, masters routes, and the invoice
   lifecycle, all zod-validated and behind `requireAuth` + `requirePermission`
 
@@ -52,6 +59,7 @@ PGDATABASE=bizsuite npm run test:auth           # login/session/logout over real
 PGDATABASE=bizsuite npm run test:rbac           # role_permissions + route guard
 PGDATABASE=bizsuite npm run test:masters        # items & companies CRUD + RBAC
 PGDATABASE=bizsuite npm run test:quotations     # quotation lifecycle + convert + RBAC
+PGDATABASE=bizsuite npm run test:sales-orders    # sales order lifecycle + billing + RBAC
 PGDATABASE=bizsuite npx tsx test/concurrency.ts # 5 parallel sales, 1 unit, 1 winner
 PGDATABASE=bizsuite npm run dev                 # API on :3000
 ```
@@ -69,13 +77,17 @@ PGDATABASE=bizsuite npm run dev                 # API on :3000
 - auth 14/14 / rbac 18/18 (regression-updated for the D4 grant) / masters 17/17
 - **quotations: 27/27** — non-posting GST math (intra CGST+SGST, no rupee
   rounding), draft edit, QTN numbering on submit, immutable-after-submit,
-  quote → draft-invoice conversion (linked both ways, one-time), admin-only cancel
+  quote → draft **sales order** conversion (linked, one-time), admin-only cancel
+- **sales-orders: 30/30** — non-posting GST (rounded), draft edit, SO numbering,
+  immutable-after-submit, SO → draft invoice link, **derived billing status**
+  (Not/Fully Billed from submitted invoices), one-time billing, cancel blocked
+  once invoiced, admin-only cancel
 - **Playwright E2E 8/8** (`npm run test:e2e`, real SPA + real DB): khata rail
   (golden payment journey, role gating) + invoice rail (guided invoice → server
   totals → submit → khata; insufficient-stock edit-and-retry; admin-only
   cancel; draft resume from the register)
 
-CI: `.github/workflows/ci.yml` runs typecheck + all seven suites against a
+CI: `.github/workflows/ci.yml` runs typecheck + all eight suites against a
 Postgres 16 service on every push/PR.
 
 ## Environment

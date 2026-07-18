@@ -2,8 +2,8 @@ import { useMemo, useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  CreateQuotation,
-  type CompanySettingsDto, type ItemOption, type KhataReport, type QuotationDetail,
+  CreateSalesOrder,
+  type CompanySettingsDto, type ItemOption, type KhataReport, type SalesOrderDetail,
 } from "@bizsuite/contracts";
 import { api, friendlyMessage } from "../api";
 import { inr } from "./Khata";
@@ -12,11 +12,9 @@ import { ItemPicker } from "../components/ItemPicker";
 import { GST_STATES, stateName } from "../gst-states";
 
 /**
- * Guided quotation entry — the sales flow, mirroring the invoice builder but
- * non-posting: no warehouse, no stock, no due date. GST is NOT computed here;
- * "Save draft" posts to the server and the review screen (QuotationDetail)
- * shows the server-computed totals. Drafts survive server-side and resume from
- * the quotations register.
+ * Guided sales-order entry — mirrors the quotation builder but for a confirmed
+ * order: adds a delivery date and the customer's PO reference. Non-posting; GST
+ * is computed server-side and shown on the review screen (SalesOrderDetail).
  */
 
 interface LineDraft {
@@ -32,7 +30,7 @@ let lineKey = 1;
 const newLine = (): LineDraft => ({ key: lineKey++, item: null, description: "", qty: "1", rate: "", discountPct: "" });
 const today = (): string => new Date().toISOString().slice(0, 10);
 
-export function QuotationNewScreen() {
+export function SalesOrderNewScreen() {
   const { id: editingId } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -40,9 +38,10 @@ export function QuotationNewScreen() {
   const [customer, setCustomer] = useState<CustomerOption | null>(null);
   const [placeOfSupply, setPlaceOfSupply] = useState("");
   const [docDate, setDocDate] = useState(today());
-  const [validUntil, setValidUntil] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState("");
+  const [poNo, setPoNo] = useState("");
+  const [poDate, setPoDate] = useState("");
   const [terms, setTerms] = useState("");
-  const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<LineDraft[]>([newLine()]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,23 +56,23 @@ export function QuotationNewScreen() {
     queryFn: () => api.get<KhataReport>("/api/accounting/reports/khata"),
   });
   const editingDraft = useQuery({
-    queryKey: ["quotation", editingId],
+    queryKey: ["sales-order", editingId],
     enabled: !!editingId,
-    queryFn: () => api.get<QuotationDetail>(`/api/sales/quotations/${editingId}`),
+    queryFn: () => api.get<SalesOrderDetail>(`/api/sales/sales-orders/${editingId}`),
   });
 
-  // Edit mode: prefill the form from the server-side draft, exactly once.
   useEffect(() => {
     const d = editingDraft.data;
     if (!d || loadedDraft) return;
-    if (d.status !== "draft") { navigate(`/quotations/${d.id}`, { replace: true }); return; }
+    if (d.status !== "draft") { navigate(`/sales-orders/${d.id}`, { replace: true }); return; }
     setLoadedDraft(true);
     setCustomer({ id: d.customer_id, name: d.customer.name, gstin: d.customer.gstin, state_code: d.customer.state_code });
     setPlaceOfSupply(d.place_of_supply);
     setDocDate(d.doc_date);
-    setValidUntil(d.valid_until ?? "");
+    setDeliveryDate(d.delivery_date ?? "");
+    setPoNo(d.po_no ?? "");
+    setPoDate(d.po_date ?? "");
     setTerms(d.terms ?? "");
-    setNotes(d.notes ?? "");
     setLines(d.lines.filter((l) => l.item_id).map((l) => ({
       key: lineKey++,
       item: {
@@ -114,9 +113,10 @@ export function QuotationNewScreen() {
     customerId: customer?.id ?? "",
     placeOfSupply,
     ...(docDate ? { docDate } : {}),
-    ...(validUntil ? { validUntil } : {}),
+    ...(deliveryDate ? { deliveryDate } : {}),
+    ...(poNo.trim() ? { poNo: poNo.trim() } : {}),
+    ...(poDate ? { poDate } : {}),
     ...(terms.trim() ? { terms: terms.trim() } : {}),
-    ...(notes.trim() ? { notes: notes.trim() } : {}),
     lines: lines.filter((l) => l.item).map((l) => ({
       itemId: l.item!.id,
       description: l.description.trim() || l.item!.name,
@@ -127,9 +127,9 @@ export function QuotationNewScreen() {
       ...(l.discountPct && Number(l.discountPct) > 0 ? { discountPct: Number(l.discountPct) } : {}),
       gstRate: Number(l.item!.gst_rate),
     })),
-  }), [customer, placeOfSupply, docDate, validUntil, terms, notes, lines]);
+  }), [customer, placeOfSupply, docDate, deliveryDate, poNo, poDate, terms, lines]);
 
-  const parsed = CreateQuotation.safeParse(payload);
+  const parsed = CreateSalesOrder.safeParse(payload);
   const allLinesValid = lines.every((l) => !l.item || Number(l.qty) > 0);
   const anyItem = lines.some((l) => l.item);
   const futureDated = docDate > today();
@@ -145,11 +145,11 @@ export function QuotationNewScreen() {
     setError(null);
     try {
       const res = editingId
-        ? await api.patch<{ id: string }>(`/api/sales/quotations/${editingId}`, parsed.data)
-        : await api.post<{ id: string }>("/api/sales/quotations", parsed.data);
-      void qc.invalidateQueries({ queryKey: ["quotations"] });
-      void qc.invalidateQueries({ queryKey: ["quotation", res.id] });
-      navigate(`/quotations/${res.id}`);
+        ? await api.patch<{ id: string }>(`/api/sales/sales-orders/${editingId}`, parsed.data)
+        : await api.post<{ id: string }>("/api/sales/sales-orders", parsed.data);
+      void qc.invalidateQueries({ queryKey: ["sales-orders"] });
+      void qc.invalidateQueries({ queryKey: ["sales-order", res.id] });
+      navigate(`/sales-orders/${res.id}`);
     } catch (e) {
       setError(friendlyMessage(e));
       setBusy(false);
@@ -163,10 +163,10 @@ export function QuotationNewScreen() {
 
   return (
     <>
-      <h1>{editingId ? "Edit draft quotation" : "New quotation"}</h1>
+      <h1>{editingId ? "Edit draft sales order" : "New sales order"}</h1>
       <p className="sub">
-        Step through: customer → items → dates. A quotation is an estimate —
-        nothing hits the books. Submit to lock it, then convert to a sales order when the customer confirms.
+        Confirm the customer's order: customer → items → delivery & PO. Nothing hits the
+        books — raise the GST invoice from the order once it's ready to bill.
       </p>
 
       <div className="card">
@@ -258,22 +258,31 @@ export function QuotationNewScreen() {
         <div className="card">
           <div className="row">
             <div>
-              <label htmlFor="docdate">Quotation date</label>
+              <label htmlFor="docdate">Order date</label>
               <input id="docdate" type="date" value={docDate} max={today()}
                      onChange={(e) => setDocDate(e.target.value)} />
-              {futureDated && <div className="field-error">The quotation date cannot be in the future.</div>}
+              {futureDated && <div className="field-error">The order date cannot be in the future.</div>}
             </div>
             <div>
-              <label htmlFor="validuntil">Valid until <span className="hint">(optional)</span></label>
-              <input id="validuntil" type="date" value={validUntil} min={docDate}
-                     onChange={(e) => setValidUntil(e.target.value)} />
+              <label htmlFor="delivery">Delivery date <span className="hint">(optional)</span></label>
+              <input id="delivery" type="date" value={deliveryDate} min={docDate}
+                     onChange={(e) => setDeliveryDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="row">
+            <div>
+              <label htmlFor="pono">Customer PO no. <span className="hint">(optional)</span></label>
+              <input id="pono" value={poNo} onChange={(e) => setPoNo(e.target.value)}
+                     placeholder="Buyer's purchase order reference" />
+            </div>
+            <div>
+              <label htmlFor="podate">Customer PO date <span className="hint">(optional)</span></label>
+              <input id="podate" type="date" value={poDate} onChange={(e) => setPoDate(e.target.value)} />
             </div>
           </div>
           <label htmlFor="terms" style={{ marginTop: 12 }}>Terms <span className="hint">(optional — shown on the printout)</span></label>
           <input id="terms" value={terms} onChange={(e) => setTerms(e.target.value)}
                  placeholder="e.g. 50% advance, delivery in 7 days" />
-          <label htmlFor="notes" style={{ marginTop: 12 }}>Internal notes <span className="hint">(optional)</span></label>
-          <input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </div>
       )}
 

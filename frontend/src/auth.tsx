@@ -62,7 +62,9 @@ export function canCreateInvoice(user: AuthUserDto | null): boolean {
   return user?.roleName === "admin" || user?.roleName === "accounts" || user?.roleName === "sales";
 }
 
-/** Sales module (quotations) — seeded write+submit for admin, accounts, sales. */
+/** Sales module (quotations + sales orders) — seeded write+submit for
+ *  admin, accounts, sales. */
 export function canCreateQuote(user: AuthUserDto | null): boolean {
   return user?.roleName === "admin" || user?.roleName === "accounts" || user?.roleName === "sales";
 }
+export const canCreateSalesOrder = canCreateQuote;

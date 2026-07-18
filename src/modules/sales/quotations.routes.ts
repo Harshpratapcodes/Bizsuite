@@ -4,8 +4,9 @@ import { CreateQuotation, ConvertQuotation } from "@bizsuite/contracts";
 import { requireAuth, actorId } from "../../core/middleware.js";
 import { requirePermission } from "../../core/rbac.js";
 import {
-  createDraftQuotation, updateDraftQuotation, quotationLifecycle, convertQuotationToInvoice,
+  createDraftQuotation, updateDraftQuotation, quotationLifecycle,
 } from "./quotations.service.js";
+import { createSalesOrderFromQuotation } from "./sales-orders.service.js";
 import { pool } from "../../shared/db.js";
 import { AppError } from "../../shared/errors.js";
 
@@ -46,9 +47,10 @@ quotationsRouter.get("/", requireAuth, requirePermission("sales", "read"), async
     const { rows } = await pool.query(
       `SELECT q.id, q.doc_no, q.doc_date, q.status, q.customer_id,
               c.name AS customer_name, q.valid_until, q.grand_total,
-              q.converted_invoice_id, q.created_by, q.created_at
+              so.id AS sales_order_id, q.created_by, q.created_at
          FROM quotations q
          JOIN companies c ON c.id = q.customer_id
+         LEFT JOIN sales_orders so ON so.quotation_id = q.id AND so.status <> 'cancelled'
         ${where.length ? "WHERE " + where.join(" AND ") : ""}
         ORDER BY q.doc_date DESC, q.created_at DESC
         LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -75,16 +77,16 @@ quotationsRouter.post("/:id/cancel", requireAuth, requirePermission("sales", "ca
   catch (e) { next(e); }
 });
 
-// Convert produces a DRAFT invoice, so it is gated on the invoice-write
-// permission (the tangible effect lives in the invoicing module).
-quotationsRouter.post("/:id/convert", requireAuth, requirePermission("invoicing", "write"), async (req, res, next) => {
+// Convert produces a DRAFT Sales Order (the ERPNext/Odoo chain) — gated on
+// sales-write; the created order is completed and submitted separately.
+quotationsRouter.post("/:id/convert", requireAuth, requirePermission("sales", "write"), async (req, res, next) => {
   try {
     const input = ConvertQuotation.parse(req.body);
-    res.status(201).json(await convertQuotationToInvoice(req.params.id!, input, actorId(req)));
+    res.status(201).json(await createSalesOrderFromQuotation(req.params.id!, input, actorId(req)));
   } catch (e) { next(e); }
 });
 
-// Detail = header + lines + customer + company snapshot + converted invoice no:
+// Detail = header + lines + customer + company snapshot + linked sales order:
 // one fetch drives the review step, the resume-draft edit, and the print sheet.
 quotationsRouter.get("/:id", requireAuth, requirePermission("sales", "read"), async (req, res, next) => {
   try {
@@ -94,7 +96,7 @@ quotationsRouter.get("/:id", requireAuth, requirePermission("sales", "read"), as
               q.terms, q.notes,
               q.subtotal, q.discount_total, q.taxable_total,
               q.cgst_total, q.sgst_total, q.igst_total, q.grand_total,
-              q.converted_invoice_id, ci.doc_no AS converted_invoice_no,
+              so.id AS sales_order_id, so.doc_no AS sales_order_no,
               q.submitted_at, q.created_at,
               jsonb_build_object(
                 'name', c.name, 'gstin', c.gstin, 'state_code', c.state_code,
@@ -107,7 +109,7 @@ quotationsRouter.get("/:id", requireAuth, requirePermission("sales", "read"), as
                  FROM company_settings s WHERE s.id = 1) AS company
          FROM quotations q
          JOIN companies c ON c.id = q.customer_id
-         LEFT JOIN invoices ci ON ci.id = q.converted_invoice_id
+         LEFT JOIN sales_orders so ON so.quotation_id = q.id AND so.status <> 'cancelled'
         WHERE q.id = $1`, [req.params.id]);
     if (!q) throw new AppError("NOT_FOUND", "Quotation not found", 404);
     const { rows: lines } = await pool.query(

@@ -83,13 +83,47 @@ export const CreateQuotation = z.object({
 });
 export type CreateQuotationInput = z.infer<typeof CreateQuotation>;
 
-/** Convert a submitted quotation into a draft invoice; warehouse is needed
- *  because invoices issue stock and quotations don't carry one. */
+/** Convert a submitted quotation into a draft Sales Order (ERPNext/Odoo chain:
+ *  quotation → sales order → invoice). Optional order details the staff adds. */
 export const ConvertQuotation = z.object({
+  deliveryDate: isoDate.optional(),
+  poNo: z.string().max(64).optional(),
+  poDate: isoDate.optional(),
+});
+export type ConvertQuotationInput = z.infer<typeof ConvertQuotation>;
+
+// ---------------------------------------------------------------------------
+// Sales orders (non-posting confirmed order; rounds to the rupee)
+// ---------------------------------------------------------------------------
+export const CreateSalesOrder = z.object({
+  customerId: z.string().uuid(),
+  placeOfSupply: z.string().length(2),
+  docDate: isoDate.optional(),        // order date; server rejects future dates
+  deliveryDate: isoDate.optional(),
+  poNo: z.string().max(64).optional(),
+  poDate: isoDate.optional(),
+  terms: z.string().max(2000).optional(),
+  notes: z.string().max(2000).optional(),
+  lines: z.array(z.object({
+    itemId: z.string().uuid(),
+    description: z.string().min(1),
+    hsn: z.string().regex(/^[0-9]{4,8}$/),
+    qty,
+    uom: z.string().min(1).optional(),
+    rate: money,
+    discountPct: z.number().min(0).max(100).optional(),
+    gstRate: z.number(),
+  })).min(1),
+});
+export type CreateSalesOrderInput = z.infer<typeof CreateSalesOrder>;
+
+/** Raise a draft invoice from a submitted sales order; warehouse is needed
+ *  because the invoice issues stock and the order doesn't carry one. */
+export const MakeInvoiceFromSalesOrder = z.object({
   warehouseId: z.string().uuid(),
   dueDate: isoDate.optional(),
 });
-export type ConvertQuotationInput = z.infer<typeof ConvertQuotation>;
+export type MakeInvoiceFromSalesOrderInput = z.infer<typeof MakeInvoiceFromSalesOrder>;
 
 export const CreatePayment = z.object({
   customerId: z.string().uuid(),
@@ -283,8 +317,8 @@ export interface QuotationDetail {
   sgst_total: string;
   igst_total: string;
   grand_total: string;
-  converted_invoice_id: string | null;
-  converted_invoice_no: string | null;
+  sales_order_id: string | null;          // set once converted to a sales order
+  sales_order_no: string | null;
   submitted_at: string | null;
   created_at: string;
   customer: {
@@ -306,7 +340,78 @@ export interface QuotationListRow {
   customer_name: string;
   valid_until: string | null;
   grand_total: string;
-  converted_invoice_id: string | null;
+  sales_order_id: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+// Sales order read-side DTOs
+export interface SalesOrderLineDto {
+  id: string;
+  item_id: string | null;
+  description: string;
+  hsn_sac_code: string;
+  qty: string;
+  uom: string;
+  rate: string;
+  discount_pct: string;
+  taxable_value: string;
+  gst_rate: string;
+  cgst_amount: string;
+  sgst_amount: string;
+  igst_amount: string;
+  line_total: string;
+  sort_order: number;
+}
+
+/** GET /api/sales/sales-orders/:id — header + lines + parties + billing status. */
+export interface SalesOrderDetail {
+  id: string;
+  doc_no: string | null;
+  doc_date: string;
+  status: string;                         // draft | submitted | cancelled
+  billing_status: string;                 // Not Billed | Partly Billed | Fully Billed (derived)
+  customer_id: string;
+  quotation_id: string | null;
+  quotation_no: string | null;
+  place_of_supply: string;
+  is_inter_state: boolean;
+  delivery_date: string | null;
+  po_no: string | null;
+  po_date: string | null;
+  terms: string | null;
+  notes: string | null;
+  subtotal: string;
+  discount_total: string;
+  taxable_total: string;
+  cgst_total: string;
+  sgst_total: string;
+  igst_total: string;
+  rounding_adjustment: string;
+  grand_total: string;
+  submitted_at: string | null;
+  created_at: string;
+  customer: {
+    name: string;
+    gstin: string | null;
+    state_code: string | null;
+    billing_address: Record<string, unknown>;
+  };
+  company: CompanySettingsDto;
+  lines: SalesOrderLineDto[];
+  invoices: { id: string; doc_no: string | null; status: string; grand_total: string }[];
+}
+
+export interface SalesOrderListRow {
+  id: string;
+  doc_no: string | null;
+  doc_date: string;
+  status: string;
+  billing_status: string;
+  customer_id: string;
+  customer_name: string;
+  delivery_date: string | null;
+  grand_total: string;
   created_by: string | null;
   created_at: string;
 }

@@ -570,6 +570,74 @@ CREATE TABLE quotation_lines (
 );
 CREATE INDEX idx_qtn_lines ON quotation_lines(quotation_id);
 
+-- Sales Order: the confirmed order between quotation and invoice (ERPNext/Odoo
+-- standard chain). Non-posting and immutable after submit, like the quotation;
+-- its billing status is DERIVED from the invoices raised against it (§ design
+-- principle 3), so partial billing needs no stored counters.
+CREATE TABLE sales_orders (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  doc_no               text UNIQUE,                    -- issued at submission (SO-2026-…)
+  doc_date             date NOT NULL DEFAULT CURRENT_DATE,   -- order date (ERPNext transaction_date)
+  status               doc_status NOT NULL DEFAULT 'draft',
+  customer_id          uuid NOT NULL REFERENCES companies(id),
+  contact_id           uuid REFERENCES contacts(id),
+  quotation_id         uuid REFERENCES quotations(id),       -- source quote (ERPNext prevdoc)
+  place_of_supply      text NOT NULL,
+  is_inter_state       boolean NOT NULL DEFAULT false,
+  delivery_date        date,
+  po_no                text,                           -- customer's PO reference (B2B)
+  po_date              date,
+  subtotal             numeric(15,2) NOT NULL DEFAULT 0 CHECK (subtotal >= 0),
+  discount_total       numeric(15,2) NOT NULL DEFAULT 0 CHECK (discount_total >= 0),
+  taxable_total        numeric(15,2) NOT NULL DEFAULT 0 CHECK (taxable_total >= 0),
+  cgst_total           numeric(15,2) NOT NULL DEFAULT 0 CHECK (cgst_total >= 0),
+  sgst_total           numeric(15,2) NOT NULL DEFAULT 0 CHECK (sgst_total >= 0),
+  igst_total           numeric(15,2) NOT NULL DEFAULT 0 CHECK (igst_total >= 0),
+  rounding_adjustment  numeric(4,2)  NOT NULL DEFAULT 0 CHECK (rounding_adjustment BETWEEN -0.99 AND 0.99),
+  grand_total          numeric(15,2) NOT NULL DEFAULT 0 CHECK (grand_total >= 0),
+  terms                text,
+  notes                text,
+  submitted_by         uuid REFERENCES users(id),
+  submitted_at         timestamptz,
+  cancelled_by         uuid REFERENCES users(id),
+  cancelled_at         timestamptz,
+  created_by           uuid REFERENCES users(id),
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  updated_at           timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT tax_split_consistent CHECK (
+    (is_inter_state AND cgst_total = 0 AND sgst_total = 0)
+    OR (NOT is_inter_state AND igst_total = 0)),
+  CONSTRAINT submitted_has_no CHECK (status = 'draft' OR doc_no IS NOT NULL)
+);
+CREATE INDEX idx_sales_orders_customer  ON sales_orders(customer_id);
+CREATE INDEX idx_sales_orders_status    ON sales_orders(status, doc_date);
+CREATE INDEX idx_sales_orders_quotation ON sales_orders(quotation_id);
+CREATE TRIGGER trg_so_updated BEFORE UPDATE ON sales_orders
+  FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_so_audit AFTER INSERT OR UPDATE OR DELETE ON sales_orders
+  FOR EACH ROW EXECUTE FUNCTION fn_audit();
+
+CREATE TABLE sales_order_lines (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  sales_order_id    uuid NOT NULL REFERENCES sales_orders(id) ON DELETE CASCADE,
+  item_id           uuid REFERENCES items(id),
+  quotation_line_id uuid REFERENCES quotation_lines(id),   -- provenance (ERPNext quotation_item)
+  description       text NOT NULL,
+  hsn_sac_code      text NOT NULL,
+  qty               numeric(12,3) NOT NULL CHECK (qty > 0),
+  uom               text NOT NULL DEFAULT 'Nos',
+  rate              numeric(15,2) NOT NULL CHECK (rate >= 0),
+  discount_pct      numeric(5,2)  NOT NULL DEFAULT 0 CHECK (discount_pct BETWEEN 0 AND 100),
+  taxable_value     numeric(15,2) NOT NULL CHECK (taxable_value >= 0),
+  gst_rate          numeric(5,2)  NOT NULL,
+  cgst_amount       numeric(15,2) NOT NULL DEFAULT 0,
+  sgst_amount       numeric(15,2) NOT NULL DEFAULT 0,
+  igst_amount       numeric(15,2) NOT NULL DEFAULT 0,
+  line_total        numeric(15,2) NOT NULL,
+  sort_order        smallint NOT NULL DEFAULT 0
+);
+CREATE INDEX idx_so_lines ON sales_order_lines(sales_order_id);
+
 CREATE TABLE invoices (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   kind                invoice_kind NOT NULL DEFAULT 'invoice',
@@ -579,6 +647,7 @@ CREATE TABLE invoices (
   customer_id         uuid NOT NULL REFERENCES companies(id),
   contact_id          uuid REFERENCES contacts(id),
   quotation_id        uuid REFERENCES quotations(id),
+  sales_order_id      uuid REFERENCES sales_orders(id),  -- the SO this invoice bills
   -- credit notes must reference the invoice they reverse (GSTR-1 requirement)
   against_invoice_id  uuid REFERENCES invoices(id),
   source_warehouse_id uuid REFERENCES warehouses(id),  -- stock issued from here
@@ -621,7 +690,8 @@ ALTER TABLE quotations
   ADD CONSTRAINT fk_qtn_converted_invoice
   FOREIGN KEY (converted_invoice_id) REFERENCES invoices(id);
 
-CREATE INDEX idx_invoices_customer ON invoices(customer_id);
+CREATE INDEX idx_invoices_customer    ON invoices(customer_id);
+CREATE INDEX idx_invoices_sales_order ON invoices(sales_order_id);
 CREATE INDEX idx_invoices_status   ON invoices(status, doc_date);
 CREATE INDEX idx_invoices_due      ON invoices(due_date) WHERE status = 'submitted';
 CREATE TRIGGER trg_inv_updated BEFORE UPDATE ON invoices
@@ -672,9 +742,11 @@ BEGIN
   IF TG_TABLE_NAME = 'invoices' THEN
     guard := ARRAY['status','cancelled_by','cancelled_at','updated_at',
                    'irn','irn_ack_no','irn_ack_date','signed_qr'];
-  ELSE
+  ELSIF TG_TABLE_NAME = 'quotations' THEN
     guard := ARRAY['status','cancelled_by','cancelled_at','updated_at',
                    'converted_invoice_id'];
+  ELSE  -- sales_orders (billing status is derived, so nothing else mutates)
+    guard := ARRAY['status','cancelled_by','cancelled_at','updated_at'];
   END IF;
 
   IF (to_jsonb(OLD) - guard) = (to_jsonb(NEW) - guard)
@@ -699,6 +771,9 @@ BEGIN
   IF TG_TABLE_NAME = 'invoice_lines' THEN
     SELECT status INTO v_status FROM invoices
      WHERE id = COALESCE(NEW.invoice_id, OLD.invoice_id);
+  ELSIF TG_TABLE_NAME = 'sales_order_lines' THEN
+    SELECT status INTO v_status FROM sales_orders
+     WHERE id = COALESCE(NEW.sales_order_id, OLD.sales_order_id);
   ELSE
     SELECT status INTO v_status FROM quotations
      WHERE id = COALESCE(NEW.quotation_id, OLD.quotation_id);
@@ -711,6 +786,10 @@ END $$;
 CREATE TRIGGER trg_inv_lines_frozen BEFORE INSERT OR UPDATE OR DELETE ON invoice_lines
   FOR EACH ROW EXECUTE FUNCTION fn_sales_lines_frozen();
 CREATE TRIGGER trg_qtn_lines_frozen BEFORE INSERT OR UPDATE OR DELETE ON quotation_lines
+  FOR EACH ROW EXECUTE FUNCTION fn_sales_lines_frozen();
+CREATE TRIGGER trg_so_immutable BEFORE UPDATE OR DELETE ON sales_orders
+  FOR EACH ROW EXECUTE FUNCTION fn_sales_doc_immutable();
+CREATE TRIGGER trg_so_lines_frozen BEFORE INSERT OR UPDATE OR DELETE ON sales_order_lines
   FOR EACH ROW EXECUTE FUNCTION fn_sales_lines_frozen();
 
 -- ---------------------------------------------------------------------------
@@ -1095,6 +1174,7 @@ INSERT INTO pipeline_stages (name, sort_order, default_probability) VALUES
 
 INSERT INTO document_sequences (series, prefix, padding) VALUES
   ('QTN-2026', 'QTN-2026-', 5),
+  ('SO-2026',  'SO-2026-',  5),
   ('INV-2026', 'INV-2026-', 5),
   ('CRN-2026', 'CRN-2026-', 5),
   ('PAY-2026', 'PAY-2026-', 5),

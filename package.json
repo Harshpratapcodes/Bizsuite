@@ -17,6 +17,7 @@
     "test:rbac": "tsx test/rbac.ts",
     "test:masters": "tsx test/masters.ts",
     "test:quotations": "tsx test/quotations.ts",
+    "test:sales-orders": "tsx test/sales-orders.ts",
     "test:khata": "tsx test/khata.ts",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit"

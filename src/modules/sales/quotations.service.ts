@@ -1,22 +1,22 @@
 import type { Tx } from "../../shared/db.js";
-import { pool, withTransaction } from "../../shared/db.js";
+import { withTransaction } from "../../shared/db.js";
 import { AppError, fromPgError } from "../../shared/errors.js";
 import { makeLifecycle } from "../../core/document-engine.js";
 import { toDecimalString, toPaise } from "../../shared/money.js";
 import { computeGst, type TaxableLineInput } from "../invoicing/tax.js";
-import { createDraftInvoice, type CreateInvoiceInput } from "../invoicing/service.js";
 
 /**
  * Quotations — the sales module. A quotation is a NON-POSTING document: it
  * moves no stock and posts no journal, so its submit/cancel lifecycle hooks are
  * no-ops (the engine still issues the QTN number, freezes the lines, and flips
- * status). The one business effect is "convert": a submitted quotation spawns a
- * DRAFT invoice, linked both ways, with no re-entry of lines.
+ * status). A submitted quotation converts to a Sales Order (see
+ * sales-orders.service.ts) — the ERPNext/Odoo standard chain — not straight to
+ * an invoice.
  *
  * GST math is the same as invoices — we reuse computeGst (a pure function),
  * exactly as invoicing reuses accounting.postJournal and inventory.lockStock.
  * Quotations have no rounding-adjustment column: grand_total is the exact sum
- * (a quote is an estimate; rupee-rounding happens on the invoice).
+ * (a quote is an estimate; rupee-rounding happens on the sales order/invoice).
  */
 
 export interface CreateQuotationInput {
@@ -156,60 +156,3 @@ export const quotationLifecycle = makeLifecycle<LoadedQuotation>({
   async onSubmit() { return {}; },   // nothing hits the books
   async onCancel() { /* nothing to reverse */ },
 });
-
-// ---------------------------------------------------------------------------
-// Convert a submitted quotation -> a draft invoice (Phase 4: no re-entry).
-// The invoice is created via the invoicing service (which sets invoices.
-// quotation_id); we only stamp our own converted_invoice_id back.
-// ---------------------------------------------------------------------------
-export async function convertQuotationToInvoice(
-  id: string, opts: { warehouseId: string; dueDate?: string }, userId: string,
-): Promise<{ invoiceId: string }> {
-  const { rows: [q] } = await pool.query<{
-    status: string; customer_id: string; place_of_supply: string; converted_invoice_id: string | null;
-  }>(
-    `SELECT status, customer_id, place_of_supply, converted_invoice_id
-       FROM quotations WHERE id = $1`, [id]);
-  if (!q) throw new AppError("NOT_FOUND", "Quotation not found", 404);
-  if (q.status !== "submitted") {
-    throw new AppError("INVALID_STATE", `quotation is ${q.status}, expected submitted`, 409);
-  }
-  if (q.converted_invoice_id) {
-    throw new AppError("ALREADY_CONVERTED", "This quotation was already converted to an invoice", 409);
-  }
-
-  const { rows: lines } = await pool.query<{
-    item_id: string; description: string; hsn_sac_code: string; qty: string;
-    uom: string; rate: string; discount_pct: string; gst_rate: string;
-  }>(
-    `SELECT item_id, description, hsn_sac_code, qty::text, uom, rate::text,
-            discount_pct::text, gst_rate::text
-       FROM quotation_lines WHERE quotation_id = $1 ORDER BY sort_order`, [id]);
-
-  const input: CreateInvoiceInput = {
-    customerId: q.customer_id,
-    warehouseId: opts.warehouseId,
-    placeOfSupply: q.place_of_supply,
-    ...(opts.dueDate ? { dueDate: opts.dueDate } : {}),
-    lines: lines.map((l) => ({
-      itemId: l.item_id,
-      description: l.description,
-      hsn: l.hsn_sac_code,
-      qty: l.qty,
-      uom: l.uom,
-      rate: l.rate,
-      ...(Number(l.discount_pct) > 0 ? { discountPct: Number(l.discount_pct) } : {}),
-      gstRate: Number(l.gst_rate),
-    })),
-  };
-
-  const { id: invoiceId } = await createDraftInvoice(input, userId, { quotationId: id });
-
-  // Stamp the link on our own table (converted_invoice_id is whitelisted for
-  // update even on a submitted quotation). withTransaction sets app.user_id.
-  await withTransaction(userId, (tx) =>
-    tx.query(`UPDATE quotations SET converted_invoice_id = $2 WHERE id = $1`, [id, invoiceId]),
-  ).catch((e) => { throw fromPgError(e); });
-
-  return { invoiceId };
-}

@@ -68,6 +68,9 @@ jobs:
       - name: Quotations suite
         run: npm run test:quotations
 
+      - name: Sales orders suite
+        run: npm run test:sales-orders
+
       - name: Khata rail suite
         run: npm run test:khata
 

@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { useAuth, canEnterOpening, canCreateInvoice, canCreateQuote } from "./auth";
+import { useAuth, canEnterOpening, canCreateInvoice, canCreateQuote, canCreateSalesOrder } from "./auth";
 import { LoginScreen } from "./screens/Login";
 import { HomeScreen } from "./screens/Home";
 import { Workspace } from "./components/Workspace";
@@ -12,6 +12,9 @@ import { InvoiceDetailScreen } from "./screens/InvoiceDetail";
 import { QuotationsScreen } from "./screens/Quotations";
 import { QuotationNewScreen } from "./screens/QuotationNew";
 import { QuotationDetailScreen } from "./screens/QuotationDetail";
+import { SalesOrdersScreen } from "./screens/SalesOrders";
+import { SalesOrderNewScreen } from "./screens/SalesOrderNew";
+import { SalesOrderDetailScreen } from "./screens/SalesOrderDetail";
 
 /**
  * Shell (Bizesuite design): "/" is the home launcher; every module screen
@@ -37,6 +40,10 @@ export function App() {
         {canCreateQuote(user) && <Route path="/quotations/new" element={<QuotationNewScreen />} />}
         {canCreateQuote(user) && <Route path="/quotations/:id/edit" element={<QuotationNewScreen />} />}
         <Route path="/quotations/:id" element={<QuotationDetailScreen />} />
+        <Route path="/sales-orders" element={<SalesOrdersScreen />} />
+        {canCreateSalesOrder(user) && <Route path="/sales-orders/new" element={<SalesOrderNewScreen />} />}
+        {canCreateSalesOrder(user) && <Route path="/sales-orders/:id/edit" element={<SalesOrderNewScreen />} />}
+        <Route path="/sales-orders/:id" element={<SalesOrderDetailScreen />} />
         {canEnterOpening(user) && <Route path="/opening-balances" element={<OpeningBalanceScreen />} />}
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
