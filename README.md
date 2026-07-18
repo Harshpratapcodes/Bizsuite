@@ -117,6 +117,22 @@ Copy `.env.example` → `.env`. Either set `DATABASE_URL` (cloud/Neon, keep
 `sslmode=require` in the URL) or the `PG*` vars (local). `.env` is gitignored;
 CI sets real env vars and ignores it.
 
+## Deploy (Render + Neon)
+Same one-container shape as Odoo/ERPNext: a single always-on process (Express
+API + built SPA) against an external Postgres.
+
+- `Dockerfile` — multi-stage: build the SPA, then a prod-deps-only runtime
+  (`node --import tsx src/server.ts`). Runs anywhere (Render/Fly/Koyeb/VPS).
+- `render.yaml` — Render Blueprint: one Docker web service in **Virginia**
+  (matches the Neon `us-east-1` DB), health check on `/healthz`, deploys on
+  every push to `main`. `DATABASE_URL` is entered in the dashboard, never
+  committed.
+
+First-time setup: Render dashboard → New → Blueprint → pick this GitHub repo →
+it reads `render.yaml` → paste the Neon **pooled** `DATABASE_URL` when
+prompted. Free tier sleeps after ~15 min idle (cold start on wake); upgrade to
+Starter when the business depends on it.
+
 ## Next (per the approved design doc + eng review)
 T6–T8 and the guided invoice UI are done. Remaining: **CA handshake + monthly
 CSV export (T11 — blocks the first real system B2B invoice)**, deploy +

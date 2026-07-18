@@ -104,7 +104,7 @@ Tasks:
 - [x] Audit-trail plumbing: actor propagated through service layer — *`withTransaction` sets `app.user_id` for audit triggers*
 - [ ] React app shell: routing, layout, auth guard, design-system baseline
 - [~] Admin can create/deactivate users — *`createUser` service exists; no deactivate endpoint or admin UI yet*
-- [ ] **Deploy:** VPS + Docker Compose + HTTPS (reverse proxy) + CI/CD push-to-deploy
+- [~] **Deploy:** ~~VPS + Docker Compose~~ → **Render (Docker) + Neon** — same one-container shape, zero ops. `Dockerfile` (multi-stage, prod-deps runtime) + `render.yaml` (Virginia = Neon's region, `/healthz` check, push-to-deploy) written and runtime-verified locally; **first Render deploy still to be done** (connect repo in dashboard + paste `DATABASE_URL`). HTTPS + CI/CD come free from Render
 - [ ] Nightly automated Postgres backup (restore drill deferred to Phase 6)
 - [ ] Harden: helmet, rate limiting on `/auth/*`, CSRF tokens (per system-design §6)
 
@@ -280,5 +280,6 @@ Anything tempting mid-build goes here, not into the current phase.
 **DB:** Neon (cloud) via `DATABASE_URL` in gitignored `.env`; schema loaded 2026-07-04; migrations applied 2026-07-18: sales-order stage, then financial periods. Accounting core + journals needed no schema change.
 **Not yet built:** CA handshake + CSV export (T11 — **still blocks the first real system B2B invoice**), deploy/hardening (T12), restore drill (T10), admin UI for users/warehouses (SQL/CLI only today). Accounting follow-ups: period-close should also lock the stock ledger (currently gates journal postings only); "generate next fiscal year" periods. Sales follow-ups: partial/line-level billing, Delivery Note (with inventory), Odoo-style unified "Sales" app.
 **Real-world track:** Friday Pilot starts this week (probe question → top-15 debtors → bill photos → first digest). Staff hire needs owner/date/budget (D11).
-**Next action:** commit the journals + periods work → CI green; then **deploy** (Phase 1 bulk) + T11 CA handshake. With Phase 2 core built, deploy is now the critical path to a live URL for UAT. E2E specs for the accounting screens + quote→SO→invoice chain still to add.
-**Last updated:** 2026-07-18 (Financial periods + posting lock — Phase 2 core built)
+**Deploy prep (2026-07-18):** Render + Neon chosen over VPS/Vercel (ADR-worthy: the app is a deliberate single stateful process — the Odoo/ERPNext shape — so serverless fights it; Render runs the container as-is). Added `Dockerfile` (multi-stage; `tsx` moved to runtime deps; `node --import tsx` as PID-1), `.dockerignore`, `render.yaml` (Docker web service, **Virginia** to match Neon us-east-1, `/healthz` health check, auto-deploy on push, `DATABASE_URL` as dashboard secret). Hardening that surfaced: `trust proxy` set (correct client IPs behind Render's TLS proxy) and `/healthz` no longer crashes the process on a DB blip (async rejection → now 503). Runtime command verified locally against Neon (healthz 200, SPA served, API auth-guarded); full image build still unverified locally (Docker Desktop engine wouldn't start) — Render's build is the real test.
+**Next action:** commit + push the deploy prep → connect the repo in the Render dashboard (New → Blueprint) + paste the Neon pooled `DATABASE_URL` → first live URL. Then T11 CA handshake; harden (helmet, rate limit, CSRF) before real data. E2E specs for the accounting screens + quote→SO→invoice chain still to add.
+**Last updated:** 2026-07-18 (Render deploy prep — Dockerfile + render.yaml + proxy/healthz hardening)

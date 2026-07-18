@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+frontend/dist
+.git
+.github
+.env
+.env.*
+.claude
+docs
+e2e
+test
+test-results
+playwright-report
+playwright.config.ts
+scripts
+*.md

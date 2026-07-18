@@ -23,6 +23,9 @@ import { accountingRouter } from "./modules/accounting/accounting.routes.js";
  * module. Business routes live in src/modules/<module>/<name>.routes.ts.
  */
 const app = express();
+// Behind Render/nginx TLS termination: trust the first proxy hop so req.ip is
+// the client (audit logs, future rate limiting), not the proxy.
+app.set("trust proxy", 1);
 app.use(express.json());
 
 // ---------------------------------------------------------------------------
@@ -67,9 +70,16 @@ app.use("/api/sales/sales-orders", salesOrdersRouter);
 app.use("/api/invoicing/payments", paymentsRouter);
 app.use("/api/accounting", accountingRouter);
 
+// Health check (Render polls this). Must never throw: an uncaught async
+// rejection would take the process down on a transient DB blip — answer 503
+// and let the platform decide.
 app.get("/healthz", async (_req, res) => {
-  await pool.query("SELECT 1");
-  res.json({ ok: true });
+  try {
+    await pool.query("SELECT 1");
+    res.json({ ok: true });
+  } catch {
+    res.status(503).json({ ok: false });
+  }
 });
 
 // ---------------------------------------------------------------------------

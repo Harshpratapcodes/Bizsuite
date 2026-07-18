@@ -1,0 +1,17 @@
+# Render Blueprint — one web service running the Dockerfile.
+# DB is Neon (us-east-1), so the service is pinned to Virginia for latency.
+# DATABASE_URL is a secret: set it in the Render dashboard when prompted
+# (sync: false means "never store the value in this file").
+services:
+  - type: web
+    name: bizsuite
+    runtime: docker
+    region: virginia
+    plan: free
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
