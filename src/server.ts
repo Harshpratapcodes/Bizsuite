@@ -95,11 +95,16 @@ if (fs.existsSync(spaDist)) {
   });
 }
 
-app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (err instanceof z.ZodError) {
     return res.status(422).json({ error: { code: "VALIDATION", details: err.flatten() } });
   }
   const e = err instanceof AppError ? err : new AppError("INTERNAL", "Internal error", 500);
+  // Unexpected errors must reach the server log (Render Logs tab) with their
+  // stack — the client only ever sees the generic INTERNAL envelope.
+  if (e.code === "INTERNAL") {
+    console.error(`[internal] ${req.method} ${req.path}:`, err);
+  }
   res.status(e.status).json({ error: { code: e.code, message: e.message } });
 });
 
