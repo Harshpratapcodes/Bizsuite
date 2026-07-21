@@ -31,7 +31,7 @@ payments, khata), `accounting` (chart of accounts, journals, trial balance,
 general ledger, financial periods), `inventory` (items, stock ledger,
 moving-average valuation).
 
-## Why we're building it
+## Why I'm building it
 
 The books of a small business are the one dataset that cannot be
 "approximately right" — and the tools that get it right (ERPNext, Odoo) carry
