@@ -1,6 +1,6 @@
 # BizSuite — System Design Document
 
-**Companion documents:** `blueprint.md` (scope, phases & tracker), `schema.sql` (validated database schema), `README.md` (scaffold implementation notes)
+**Companion documents:** `blueprint.md` (scope, phases & tracker), `schema.sql` (validated database schema), `docs/implementation-notes.md` (scaffold implementation notes)
 **Status:** design v1.1 — schema validated against PostgreSQL 16.14 with passing invariant tests; Phase 0 scaffold + Phase 1 auth/RBAC/masters implemented (see §11)
 **Scale target:** 1–10 concurrent users, single business, ~10–50k documents/year
 

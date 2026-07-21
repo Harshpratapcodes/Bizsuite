@@ -1,141 +1,138 @@
-# BizSuite — Backend Scaffold (Phase 0 + Phase 1 core)
+# BizSuite
 
-Reference implementation of the modular-monolith design. Companion docs:
-`blueprint.md` (scope/phases/tracker), `system-design.md` (architecture; §11 maps
-design→built), `schema.sql`.
+A modular business management suite for a single Indian business — sales,
+invoicing, inventory, accounting and CRM in one integrated system, GST-native,
+built to the correctness standard of ERPNext and Odoo.
 
-## What's implemented
-- **shared/** — `money.ts` (integer-paise arithmetic, zero floats), `db.ts`
-  (node-postgres pool + `withTransaction` that sets `app.user_id` for audit
-  triggers), `errors.ts` (Postgres trigger errors → typed app errors)
-- **core/** — `numbering.ts` (gapless doc numbers), `document-engine.ts`
-  (generic DRAFT→SUBMITTED→CANCELLED lifecycle with onSubmit/onCancel hooks),
-  `auth.ts` (argon2id passwords + SHA-256-hashed opaque session tokens, 30-day
-  TTL), `middleware.ts` (`requireAuth`, session cookie), `rbac.ts`
-  (`requirePermission` guard over the seeded 5-role `role_permissions` matrix)
-- **modules/accounting** — `postJournal` (draft→lines→posted, app-level balance
-  assert + DB deferred trigger), `reverseJournal` (original stays posted;
-  original + reversal net to zero); **chart of accounts** (`accounts.service.ts`
-  — ERPNext Account model: tree, root_type→report_type, group rollup, balances
-  derived from posted lines; create/archive with system-account guards), the
-  ledger reports **trial balance** (nets to a balanced grand total) and
-  **general ledger** (opening → running → closing per account), **manual
-  journal entries** (`journals.service.ts` — balanced account-id postings as
-  `manual_journal`/JV-2026; admin-only reversal, original stays posted), and
-  **financial periods** (`periods.service.ts` + a `journal_entries` trigger:
-  closing a month blocks any posting dated inside it, across every module)
-- **modules/inventory** — `lockStock` (ordered FOR UPDATE = the concurrency
-  control point), `issueStock`, `receiveStock` (moving-average revaluation);
-  `items` master (CRUD service + routes: SKU, HSN/SAC, GST rate, reorder level)
-- **modules/crm** — `companies` master (CRUD service + routes: customer/supplier,
-  GST treatment, GSTIN validation, billing/shipping addresses)
-- **modules/invoicing** — GST math (per-line half-up rounding, CGST/SGST vs
-  IGST by place of supply, rupee rounding adjustment), `createDraftInvoice`,
-  `updateDraftInvoice` (draft-only full replace — the edit-and-retry rail),
-  invoice detail endpoint (header + lines + parties, print-ready), and the
-  **reference lifecycle**: submit = lock → number → sales journal →
-  stock issues → COGS journal in one transaction; cancel = full reversal
-- **modules/sales** — the ERPNext/Odoo standard chain
-  **quotation → sales order → invoice** (all non-posting until the invoice):
-  - `quotations`: `createDraftQuotation`/`updateDraftQuotation`, a no-op
-    submit/cancel `quotationLifecycle` (issues `QTN-2026`, freezes lines, touches
-    no ledger or stock); grand total is the exact sum (estimate)
-  - `sales_orders`: `createDraftSalesOrder`/`updateDraftSalesOrder`,
-    `salesOrderLifecycle` (issues `SO-2026`; cancel blocked once invoiced),
-    `createSalesOrderFromQuotation` (quote → draft SO, no re-entry) and
-    `createInvoiceFromSalesOrder` (SO → draft invoice via `createDraftInvoice`,
-    linked by `invoices.sales_order_id`). Rounds to the rupee; **billing status
-    is derived** from the submitted invoices raised against the order
-  - reuses the invoicing GST math (`computeGst`)
-- **frontend/** — operator SPA (staff-usable bar, Bizesuite design system):
-  Odoo-style **home launcher** + per-app workspace shell (topbar app switcher,
-  per-app hues); khata, payments, opening balances, invoice register, and the
-  **guided invoice flow** — new sale → server-computed review → submit →
-  print-CSS tax invoice; drafts resume from the register; INSUFFICIENT_STOCK
-  surfaces in plain language with edit-and-retry. Plus the **quotation** and
-  **sales order** apps — register → guided builder → server-computed review →
-  submit → print-CSS document → convert down the chain (quote → order → invoice)
-- **server.ts** — Express app: auth routes, masters routes, and the invoice
-  lifecycle, all zod-validated and behind `requireAuth` + `requirePermission`
+**Scale target:** 1–10 users, single tenant, ~10–50k documents/year.
+**Stack:** React SPA · Node.js/Express · TypeScript · PostgreSQL 16.
 
-## Run
+---
+
+## What it is
+
+One system where a business action ripples correctly through every module. A
+submitted invoice, in a single database transaction, locks stock, issues a
+gapless document number, posts a balanced sales journal, writes the stock
+issues, and posts COGS at valuation. Cancelling it reverses all of that —
+nothing is ever deleted.
+
+The document chain follows the ERPNext/Odoo standard:
+
+```
+quotation ──► sales order ──► invoice ──► payment
+  QTN-2026      SO-2026        INV-2026     (khata / ledger)
+              (non-posting)   (posts: GL + stock + COGS)
+```
+
+Modules today: `core` (auth, RBAC, numbering, document engine), `crm`
+(companies), `sales` (quotations, sales orders), `invoicing` (GST invoices,
+payments, khata), `accounting` (chart of accounts, journals, trial balance,
+general ledger, financial periods), `inventory` (items, stock ledger,
+moving-average valuation).
+
+## Why we're building it
+
+The books of a small business are the one dataset that cannot be
+"approximately right" — and the tools that get it right (ERPNext, Odoo) carry
+an operational and customisation cost that a 10-person business running one
+developer cannot absorb, while the tools that are easy to run (spreadsheets,
+point solutions) don't keep stock, ledger and GST in agreement with each other.
+
+BizSuite is the narrow version: the ERP correctness model, ported honestly, for
+exactly one business. Six properties drive every design decision
+(`system-design.md §1`):
+
+| Property | Requirement | What it forces |
+|---|---|---|
+| **Correctness** | Financial and stock data must never be wrong or unverifiable | Append-only ledgers, DB-enforced invariants, derived balances |
+| **Integration** | One action ripples correctly across modules | Single database, cross-module work in one transaction |
+| **Simplicity** | One developer must operate the whole system | Modular monolith, one deployable, boring stack |
+| **Auditability** | Every number traces to a document and a user | Trigger-based audit log, immutable submitted documents |
+| **Compliance** | GST-correct invoices, e-invoicing-ready | GST-native schema, IRN fields, GSTR views |
+| **Availability** | Business hours; minutes of downtime acceptable | Single node + fast restore beats HA at this scale |
+
+Explicitly **not** goals: horizontal scaling, multi-tenancy, multi-region,
+sub-100ms p99. At 10 users, one Postgres instance is idle 99% of the time.
+
+## Architecture in brief
+
+**A strict modular monolith.** One container (Express API + built SPA) against
+one PostgreSQL database. Module boundaries are real — each module owns its
+tables and is reached only through its service interface, never by cross-module
+table access — but they are enforced by review and lint rules, not network
+hops, because transactional integrity across modules *is* the product.
+
+```
+Browser (React SPA)
+      │ HTTPS
+Express: helmet → rate-limit → session auth → RBAC(module, action) → zod → route
+      │
+  crm · sales · invoicing · accounting · inventory     ← service interfaces
+      │
+  core/  auth · RBAC · document engine · numbering · audit
+  shared/ db (node-postgres) · money · errors
+      │
+PostgreSQL 16 — append-only ledgers · deferred constraint triggers · audit log
+```
+
+The load-bearing decisions:
+
+- **The database is the last line of defence.** Deferred constraint triggers
+  verify journal balance; a closed financial period blocks any posting dated
+  inside it, from any module. Application bugs are inevitable; corrupted books
+  are unrecoverable.
+- **Append-only, reversal-only.** Corrections create a reversing entry; both
+  entries stay posted and net to zero. No UPDATE, no DELETE on a ledger.
+- **A generic document engine.** Every document runs the same
+  DRAFT → SUBMITTED → CANCELLED lifecycle with `onSubmit`/`onCancel` hooks.
+  Drafts are free and editable; numbers are issued at submission, so statutory
+  sequences stay gapless.
+- **Integer paise everywhere.** No float ever touches money; `NUMERIC` arrives
+  from Postgres as a string and is parsed only inside the money utility.
+- **Ordered `SELECT … FOR UPDATE`** is the single stock concurrency control
+  point — five parallel sales of one unit yield exactly one winner.
+- **Raw node-postgres, no ORM** — the invariants live in triggers,
+  deferred constraints and `SET LOCAL app.user_id`; hand-written SQL keeps that
+  contract explicit.
+- **Sessions over JWT, one node over Kubernetes** — at this scale, every
+  component you don't run is reliability you don't have to earn.
+
+Full reasoning: `system-design.md`; decisions per-file in [docs/adr/](docs/adr/).
+
+## Repo map
+
+| Path | What's there |
+|---|---|
+| [src/](src/) | API: `core/`, `shared/`, `modules/{crm,sales,invoicing,accounting,inventory}`, `server.ts` |
+| [frontend/](frontend/) | Operator SPA — Odoo-style home launcher + per-app workspaces |
+| [packages/contracts/](packages/contracts/) | zod schemas shared by client and server |
+| [schema.sql](schema.sql) | Full DDL: constraints, triggers, seed roles & accounts |
+| [test/](test/) | Integration suites (real Postgres) + concurrency test |
+| [e2e/](e2e/) | Playwright end-to-end journeys against the real SPA + DB |
+| [docs/](docs/) | Implementation notes, ADRs, per-phase design/test/release docs |
+
+## Quick start
+
 ```bash
 createdb bizsuite && psql -d bizsuite -f schema.sql
 npm install
-PGDATABASE=bizsuite npm run test:integration    # 25 assertions, full quote-to-cash
-PGDATABASE=bizsuite npm run test:auth           # login/session/logout over real HTTP
-PGDATABASE=bizsuite npm run test:rbac           # role_permissions + route guard
-PGDATABASE=bizsuite npm run test:masters        # items & companies CRUD + RBAC
-PGDATABASE=bizsuite npm run test:quotations     # quotation lifecycle + convert + RBAC
-PGDATABASE=bizsuite npm run test:sales-orders    # sales order lifecycle + billing + RBAC
-PGDATABASE=bizsuite npm run test:accounting      # chart of accounts + trial balance + GL
-PGDATABASE=bizsuite npm run test:journals        # manual journal post + reversal + RBAC
-PGDATABASE=bizsuite npm run test:periods         # period close/reopen + posting lock
-PGDATABASE=bizsuite npx tsx test/concurrency.ts # 5 parallel sales, 1 unit, 1 winner
-PGDATABASE=bizsuite npm run dev                 # API on :3000
+PGDATABASE=bizsuite npm run test:integration   # full quote-to-cash
+PGDATABASE=bizsuite npm run dev                # API on :3000
+npm run dev:web                                # SPA
 ```
 
-## Test status (last full run: 2026-07-16, Neon cloud Postgres 18.4)
-- integration: **25/25** — moving average, GST totals, balanced journals,
-  COGS at valuation, sub-ledger, outstanding view, oversell rollback,
-  cancellation reversal, GL-zero + stock-cache integrity, audit attribution
-- **khata rail: 35/35** — opening balances (idempotent, 422/403/409 guards),
-  on-account + allocated payments (staff-role submit end-to-end per D4),
-  partial-payment status, cancel-as-reversal nets to zero, invoice list,
-  Friday digest incl. empty-week
-- concurrency: **PASS** — 5 parallel submitters, exactly 1 success,
-  losers fail with `INSUFFICIENT_STOCK`, ledgers consistent after
-- auth 14/14 / rbac 18/18 (regression-updated for the D4 grant) / masters 17/17
-- **quotations: 27/27** — non-posting GST math (intra CGST+SGST, no rupee
-  rounding), draft edit, QTN numbering on submit, immutable-after-submit,
-  quote → draft **sales order** conversion (linked, one-time), admin-only cancel
-- **sales-orders: 30/30** — non-posting GST (rounded), draft edit, SO numbering,
-  immutable-after-submit, SO → draft invoice link, **derived billing status**
-  (Not/Fully Billed from submitted invoices), one-time billing, cancel blocked
-  once invoiced, admin-only cancel
-- **accounting: 17/17** — chart-of-accounts tree, create with inherited root
-  type, archive guards (system account 409, non-group parent 422), **trial
-  balance balances** (grand debit == grand credit), general ledger for the
-  Debtors control account, RBAC
-- **journals: 17/17** — balanced manual post (JV numbering), validation guards
-  (unbalanced/both-sided line/group account/future date → 422), RBAC (accounts
-  posts, readonly 403, reverse admin-only), reversal nets to zero (trial balance
-  still balances), one-time + manual-only reversal
-- **periods: 12/12** — open/close (admin-only), the posting lock (closed period
-  → `PERIOD_CLOSED` on any dated entry), reopen restores, other periods
-  unaffected, RBAC
-- **Playwright E2E 8/8** (`npm run test:e2e`, real SPA + real DB): khata rail
-  (golden payment journey, role gating) + invoice rail (guided invoice → server
-  totals → submit → khata; insufficient-stock edit-and-retry; admin-only
-  cancel; draft resume from the register)
+Copy `.env.example` → `.env`: either `DATABASE_URL` (cloud/Neon, keep
+`sslmode=require`) or the `PG*` vars (local). Every suite, the deploy shape and
+current test status are in
+[docs/implementation-notes.md](docs/implementation-notes.md).
 
-CI: `.github/workflows/ci.yml` runs typecheck + all eleven suites against a
-Postgres 16 service on every push/PR.
+## Documentation
 
-## Environment
-Copy `.env.example` → `.env`. Either set `DATABASE_URL` (cloud/Neon, keep
-`sslmode=require` in the URL) or the `PG*` vars (local). `.env` is gitignored;
-CI sets real env vars and ignores it.
-
-## Deploy (Render + Neon)
-Same one-container shape as Odoo/ERPNext: a single always-on process (Express
-API + built SPA) against an external Postgres.
-
-- `Dockerfile` — multi-stage: build the SPA, then a prod-deps-only runtime
-  (`node --import tsx src/server.ts`). Runs anywhere (Render/Fly/Koyeb/VPS).
-- `render.yaml` — Render Blueprint: one Docker web service in **Virginia**
-  (matches the Neon `us-east-1` DB), health check on `/healthz`, deploys on
-  every push to `main`. `DATABASE_URL` is entered in the dashboard, never
-  committed.
-
-First-time setup: Render dashboard → New → Blueprint → pick this GitHub repo →
-it reads `render.yaml` → paste the Neon **pooled** `DATABASE_URL` when
-prompted. Free tier sleeps after ~15 min idle (cold start on wake); upgrade to
-Starter when the business depends on it.
-
-## Next (per the approved design doc + eng review)
-T6–T8 and the guided invoice UI are done. Remaining: **CA handshake + monthly
-CSV export (T11 — blocks the first real system B2B invoice)**, deploy +
-hardening (T12), restore drill week one of real data (T10), admin UI for
-users/warehouses. See `blueprint.md §10` and the design doc's GSTACK review
-report.
+| Doc | What it answers |
+|---|---|
+| [blueprint.md](blueprint.md) | Scope, phases, tracker, risk register — source of truth for *what's next* |
+| [system-design.md](system-design.md) | Architecture, critical flows, security, §11 design→built status |
+| [docs/implementation-notes.md](docs/implementation-notes.md) | What's built, how to run each suite, test status, deploy |
+| [docs/adr/](docs/adr/) | One file per architectural decision |
+| [claude.md](claude.md) | Rules Claude Code must follow in this repo |

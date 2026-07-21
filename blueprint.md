@@ -37,7 +37,8 @@
 |---|---|---|
 | This blueprint | `/blueprint.md` | ✅ exists |
 | System design + diagrams | `/system-design.md` | ✅ exists (updated; see §11 impl-status table) |
-| Scaffold implementation notes | `/README.md` | ✅ exists |
+| Project overview (what/why/architecture) | `/README.md` | ✅ exists |
+| Scaffold implementation notes | `/docs/implementation-notes.md` | ✅ exists |
 | Architectural rules for Claude Code | `/claude.md` | ✅ exists |
 | ADRs (one file per decision) | `/docs/adr/NNN-title.md` | 🔲 folder to create |
 | Runbook (ops: deploy, backup, restore, incidents) | `/docs/runbook.md` | 🔲 Phase 6 |
