@@ -73,3 +73,12 @@ export function canCreateQuote(user: AuthUserDto | null): boolean {
   return user?.roleName === "admin" || user?.roleName === "accounts" || user?.roleName === "sales";
 }
 export const canCreateSalesOrder = canCreateQuote;
+
+/** CRM module — seeded write for admin and sales only. Note 'accounts' is NOT
+ *  here even though it CAN quote and invoice (schema.sql role matrix): those
+ *  staff would get a 403 from the add-customer button, so it stays hidden for
+ *  them rather than failing on click (eng review D5). Whether that role should
+ *  gain crm write is a business question tracked in TODOS.md #4. */
+export function canCreateCustomer(user: AuthUserDto | null): boolean {
+  return user?.roleName === "admin" || user?.roleName === "sales";
+}

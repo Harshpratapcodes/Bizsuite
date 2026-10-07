@@ -1,28 +1,34 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import type { CompanyDto, CustomerOption } from "@bizsuite/contracts";
 import { api } from "../api";
+import { useAuth, canCreateCustomer } from "../auth";
+import { QuickAddCustomer } from "./QuickAddCustomer";
 
-export interface CustomerOption {
-  id: string;
-  name: string;
-  // present in the API response; used by the invoice flow to default
-  // place-of-supply and show GSTIN. Optional so existing callers are unchanged.
-  gstin?: string | null;
-  state_code?: string | null;
-  gst_treatment?: string;
-}
+/** Re-exported so the five document builders keep importing it from here. */
+export type { CustomerOption };
 
 /**
- * Search-as-you-type customer picker (hard rail: staff picks from the master,
- * never types a free-text name). Debounced 250ms against
- * GET /api/crm/companies?role=customer&active=true&q=…
+ * Search-as-you-type customer picker. Staff still pick from the master rather
+ * than typing a free-text name — a document's customer is a foreign key into
+ * the party ledger, and the buyer's state decides the GST split.
+ *
+ * What changed (eng review 2026-09-10): "not found" used to be a dead end that
+ * told staff to visit a customer master screen which did not exist, and
+ * walking off to build one lost the whole draft. Now the miss offers to create
+ * the customer inline. Roles without crm write never see the button, because a
+ * control that 403s on click is worse than no control (D5).
+ *
+ * Debounced 250ms against GET /api/crm/companies?role=customer&active=true&q=…
  */
 export function CustomerPicker({ value, onChange }: {
   value: CustomerOption | null;
   onChange: (c: CustomerOption | null) => void;
 }) {
+  const { user } = useAuth();
   const [term, setTerm] = useState("");
   const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [debounced, setDebounced] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -41,10 +47,25 @@ export function CustomerPicker({ value, onChange }: {
 
   const results = useQuery({
     queryKey: ["customers", debounced],
-    enabled: open,
-    queryFn: () => api.get<CustomerOption[]>(
+    enabled: open && !adding,
+    queryFn: () => api.get<CompanyDto[]>(
       `/api/crm/companies?role=customer&active=true${debounced ? `&q=${encodeURIComponent(debounced)}` : ""}`),
   });
+
+  const canAdd = canCreateCustomer(user);
+
+  // The add form replaces the picker rather than floating over it, so there is
+  // never a second "Search customer" input in the DOM for tests (or for people
+  // tabbing through) to trip over.
+  if (adding) {
+    return (
+      <QuickAddCustomer
+        initialName={term}
+        onCreated={(c) => { setAdding(false); setOpen(false); setTerm(""); onChange(c); }}
+        onCancel={() => setAdding(false)}
+      />
+    );
+  }
 
   if (value) {
     return (
@@ -57,6 +78,8 @@ export function CustomerPicker({ value, onChange }: {
       </div>
     );
   }
+
+  const empty = results.data && results.data.length === 0;
 
   return (
     <div ref={boxRef} style={{ position: "relative", maxWidth: 420 }}>
@@ -74,9 +97,10 @@ export function CustomerPicker({ value, onChange }: {
           marginTop: 4, maxHeight: 260, overflowY: "auto", boxShadow: "0 4px 16px rgba(0,0,0,.08)",
         }}>
           {results.isLoading && <div style={{ padding: 12, color: "var(--muted)" }}>Searching…</div>}
-          {results.data && results.data.length === 0 && (
+          {empty && (
             <div style={{ padding: 12, color: "var(--muted)" }}>
-              No customer found{debounced ? ` for “${debounced}”` : ""}. Add them in the customer master first.
+              No customer found{debounced ? ` for “${debounced}”` : ""}.
+              {!canAdd && " Ask an admin to add them to the customer master."}
             </div>
           )}
           {results.data?.map((c) => (
@@ -88,6 +112,13 @@ export function CustomerPicker({ value, onChange }: {
               {c.name}
             </div>
           ))}
+          {canAdd && (
+            <div style={{ borderTop: "1px solid var(--line)", padding: 8 }}>
+              <button type="button" className="btn-link" onMouseDown={() => setAdding(true)}>
+                + Add {term.trim() ? `“${term.trim()}”` : "a new customer"}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

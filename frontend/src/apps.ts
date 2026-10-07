@@ -46,6 +46,10 @@ export function visibleApps(user: AuthUserDto | null): AppDef[] {
 /** Which app owns the current route (drives the workspace topbar). */
 export function appForPath(pathname: string): AppDef {
   const byId = (id: string): AppDef => APPS.find((a) => a.id === id)!;
+  // Customers is a MASTER, not an app: it has no launcher tile of its own and
+  // lives under Quotations, where staff hit the need. The CRM tile stays dark
+  // until Phase 5 actually ships leads and pipeline (eng review D16).
+  if (pathname.startsWith("/customers")) return byId("quotations");
   if (pathname.startsWith("/quotations")) return byId("quotations");
   if (pathname.startsWith("/sales-orders")) return byId("salesorders");
   if (pathname.startsWith("/invoices")) return byId("invoicing");
@@ -59,8 +63,8 @@ export function appForPath(pathname: string): AppDef {
 export function tabsForApp(app: AppDef, user: AuthUserDto | null): { name: string; to: string; end?: boolean }[] {
   if (app.id === "quotations") {
     return canCreateQuote(user)
-      ? [{ name: "Quotations", to: "/quotations", end: true }, { name: "New quote", to: "/quotations/new" }]
-      : [{ name: "Quotations", to: "/quotations", end: true }];
+      ? [{ name: "Quotations", to: "/quotations", end: true }, { name: "New quote", to: "/quotations/new" }, { name: "Customers", to: "/customers" }]
+      : [{ name: "Quotations", to: "/quotations", end: true }, { name: "Customers", to: "/customers" }];
   }
   if (app.id === "salesorders") {
     return canCreateSalesOrder(user)

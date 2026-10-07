@@ -10,6 +10,7 @@ import { InvoicesScreen } from "./screens/Invoices";
 import { InvoiceNewScreen } from "./screens/InvoiceNew";
 import { InvoiceDetailScreen } from "./screens/InvoiceDetail";
 import { QuotationsScreen } from "./screens/Quotations";
+import { CustomersScreen } from "./screens/Customers";
 import { QuotationNewScreen } from "./screens/QuotationNew";
 import { QuotationDetailScreen } from "./screens/QuotationDetail";
 import { SalesOrdersScreen } from "./screens/SalesOrders";
@@ -43,6 +44,8 @@ export function App() {
         {canCreateInvoice(user) && <Route path="/invoices/new" element={<InvoiceNewScreen />} />}
         {canCreateInvoice(user) && <Route path="/invoices/:id/edit" element={<InvoiceNewScreen />} />}
         <Route path="/invoices/:id" element={<InvoiceDetailScreen />} />
+        <Route path="/customers" element={<CustomersScreen />} />
+
         <Route path="/quotations" element={<QuotationsScreen />} />
         {canCreateQuote(user) && <Route path="/quotations/new" element={<QuotationNewScreen />} />}
         {canCreateQuote(user) && <Route path="/quotations/:id/edit" element={<QuotationNewScreen />} />}
