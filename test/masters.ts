@@ -90,17 +90,51 @@ async function main() {
       method: "POST", ...j(admin, { name: `Cust ${stamp}`, gstin: "07AAACA1234A1Z5", gstTreatment: "registered", stateCode: "07", isCustomer: true }),
     });
     check("create customer 201", custRes.status === 201, String(custRes.status));
-    const cust = await custRes.json() as { id: string };
+    const cust = await custRes.json() as Record<string, unknown> & { id: string };
 
+    // The picker selects a freshly created customer straight into a document
+    // builder, so POST must return the WHOLE row. When it returned only
+    // id+name, place of supply fell back to the seller's state and produced
+    // CGST/SGST on interstate sales (eng review T2).
+    check("create returns the full row (state_code present)", cust.state_code === "07", JSON.stringify(cust.state_code));
+    check("create returns the full row (gstin present)", cust.gstin === "07AAACA1234A1Z5");
+    check("create returns the full row (is_active present)", cust.is_active === true);
+
+    // REGRESSION GUARD: this payload used to be `{ name }` alone, which now
+    // fails the state-code rule and 422s BEFORE the duplicate check runs — so
+    // the assertion below silently stopped testing duplicates (eng review T5).
     const dupName = await fetch(`${base}/api/crm/companies`, {
-      method: "POST", ...j(admin, { name: `Cust ${stamp}` }),
+      method: "POST", ...j(admin, { name: `Cust ${stamp}`, stateCode: "07" }),
     });
     check("duplicate company name -> 409", dupName.status === 409, String(dupName.status));
 
+    // stateCode supplied so this isolates the GSTIN rule and nothing else.
     const regNoGstin = await fetch(`${base}/api/crm/companies`, {
-      method: "POST", ...j(admin, { name: `RegNoGstin ${stamp}`, gstTreatment: "registered" }),
+      method: "POST", ...j(admin, { name: `RegNoGstin ${stamp}`, gstTreatment: "registered", stateCode: "07" }),
     });
     check("registered without GSTIN -> 422", regNoGstin.status === 422, String(regNoGstin.status));
+
+    // --- state code rules: the place of supply, and therefore the GST split ---
+    const unregNoState = await fetch(`${base}/api/crm/companies`, {
+      method: "POST", ...j(admin, { name: `NoState ${stamp}`, gstTreatment: "unregistered" }),
+    });
+    check("unregistered without state code -> 422", unregNoState.status === 422, String(unregNoState.status));
+
+    const defaultNoState = await fetch(`${base}/api/crm/companies`, {
+      method: "POST", ...j(admin, { name: `NoStateDefault ${stamp}` }),
+    });
+    check("no treatment (defaults unregistered) without state code -> 422", defaultNoState.status === 422, String(defaultNoState.status));
+
+    const regNoState = await fetch(`${base}/api/crm/companies`, {
+      method: "POST", ...j(admin, { name: `RegNoState ${stamp}`, gstTreatment: "registered", gstin: "07AAACA1234A1Z6" }),
+    });
+    check("registered without state code -> 422", regNoState.status === 422, String(regNoState.status));
+
+    // Overseas/SEZ have no Indian state, so the rule must not apply to them.
+    const overseas = await fetch(`${base}/api/crm/companies`, {
+      method: "POST", ...j(admin, { name: `Overseas ${stamp}`, gstTreatment: "overseas" }),
+    });
+    check("overseas without state code -> 201", overseas.status === 201, String(overseas.status));
 
     const getCust = await (await fetch(`${base}/api/crm/companies/${cust.id}`, { headers: { cookie: admin } })).json() as Record<string, unknown>;
     check("customer is_customer true", getCust.is_customer === true);
@@ -108,6 +142,60 @@ async function main() {
 
     const custList = await (await fetch(`${base}/api/crm/companies?role=customer`, { headers: { cookie: admin } })).json() as unknown[];
     check("customer appears in customer list", custList.some((x) => (x as { id: string }).id === cust.id));
+
+    // --- search by GSTIN, not just name ---
+    const byGstin = await (await fetch(`${base}/api/crm/companies?q=07AAACA1234A1Z5`, { headers: { cookie: admin } })).json() as unknown[];
+    check("search finds the customer by GSTIN", byGstin.some((x) => (x as { id: string }).id === cust.id));
+
+    // --- exact-name lookup: what quick-add uses to recover from a 409 ---
+    const exact = await (await fetch(`${base}/api/crm/companies?name=${encodeURIComponent(`cust ${stamp}`)}`, { headers: { cookie: admin } })).json() as { id: string }[];
+    check("exact name lookup is case-insensitive and returns one row", exact.length === 1 && exact[0]!.id === cust.id, JSON.stringify(exact.length));
+    const exactMiss = await (await fetch(`${base}/api/crm/companies?name=${encodeURIComponent(`nope ${stamp}`)}`, { headers: { cookie: admin } })).json() as unknown[];
+    check("exact name lookup returns [] when there is no match", Array.isArray(exactMiss) && exactMiss.length === 0);
+
+    // --- promote a supplier-only company to also being a customer ---
+    const supRes = await fetch(`${base}/api/crm/companies`, {
+      method: "POST", ...j(admin, { name: `Supp ${stamp}`, stateCode: "09", isCustomer: false, isSupplier: true }),
+    });
+    check("create supplier-only company 201", supRes.status === 201, String(supRes.status));
+    const supp = await supRes.json() as { id: string };
+
+    const suppInCustList = await (await fetch(`${base}/api/crm/companies?role=customer`, { headers: { cookie: admin } })).json() as { id: string }[];
+    check("supplier-only company is NOT in the customer list", !suppInCustList.some((x) => x.id === supp.id));
+
+    const dupAsSupplier = await fetch(`${base}/api/crm/companies`, {
+      method: "POST", ...j(admin, { name: `Supp ${stamp}`, stateCode: "09" }),
+    });
+    check("creating a name held by a supplier -> 409 (not 500)", dupAsSupplier.status === 409, String(dupAsSupplier.status));
+
+    const promote = await fetch(`${base}/api/crm/companies/${supp.id}`, {
+      method: "PATCH", ...j(admin, { isCustomer: true }),
+    });
+    check("promote supplier to customer 200", promote.status === 200, String(promote.status));
+    const promoted = await promote.json() as Record<string, unknown>;
+    check("patch returns the full row (state_code present)", promoted.state_code === "09", JSON.stringify(promoted.state_code));
+    check("patch returns the full row (is_customer flipped)", promoted.is_customer === true);
+
+    const afterPromote = await (await fetch(`${base}/api/crm/companies?role=customer`, { headers: { cookie: admin } })).json() as { id: string }[];
+    check("promoted company now appears in the customer list", afterPromote.some((x) => x.id === supp.id));
+
+    // --- renaming onto an existing name is a typed 409, never a bare 500 ---
+    const renameClash = await fetch(`${base}/api/crm/companies/${supp.id}`, {
+      method: "PATCH", ...j(admin, { name: `Cust ${stamp}` }),
+    });
+    check("rename onto an existing name -> 409 (not 500)", renameClash.status === 409, String(renameClash.status));
+    const renameBody = await renameClash.json() as { error?: { code?: string } };
+    check("rename clash carries DUPLICATE_NAME", renameBody.error?.code === "DUPLICATE_NAME", JSON.stringify(renameBody.error?.code));
+
+    // --- deactivate, and confirm the active filter honours it ---
+    const deact = await fetch(`${base}/api/crm/companies/${supp.id}`, {
+      method: "PATCH", ...j(admin, { isActive: false }),
+    });
+    check("deactivate customer 200", deact.status === 200, String(deact.status));
+    const activeList = await (await fetch(`${base}/api/crm/companies?role=customer&active=true`, { headers: { cookie: admin } })).json() as { id: string }[];
+    check("active customer list excludes the deactivated one", !activeList.some((x) => x.id === supp.id));
+    const stillExact = await (await fetch(`${base}/api/crm/companies?name=${encodeURIComponent(`Supp ${stamp}`)}`, { headers: { cookie: admin } })).json() as unknown[];
+    check("exact lookup still finds a deactivated company", stillExact.length === 1);
   } finally {
     server.close();
   }

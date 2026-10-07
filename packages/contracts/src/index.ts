@@ -39,6 +39,141 @@ export interface AuthUserDto {
 }
 
 // ---------------------------------------------------------------------------
+// CRM — companies (the customer/supplier master, and the party dimension for
+// the receivables/payables sub-ledger)
+// ---------------------------------------------------------------------------
+export const gstin = z.string().regex(/^[0-9]{2}[A-Z0-9]{13}$/, "invalid GSTIN format");
+export const gstTreatment = z.enum(["registered", "unregistered", "overseas", "sez"]);
+export const stateCode = z.string().length(2);
+
+/** Treatments that are inside India, and therefore need a place of supply. */
+const DOMESTIC: readonly string[] = ["registered", "unregistered"];
+
+/**
+ * Structured postal address.
+ *
+ * `state` is deliberately ABSENT. The authoritative buyer state is
+ * companies.state_code — it decides CGST/SGST vs IGST and prints on its own
+ * line beside the address on every tax invoice. A free-text state here would
+ * let one document show two different states (eng review 2026-09-10, D15).
+ * Read it back with fmtAddress(), which still tolerates legacy keys.
+ */
+export const Address = z.object({
+  line1: z.string().max(200).optional(),
+  line2: z.string().max(200).optional(),
+  city: z.string().max(100).optional(),
+  district: z.string().max(100).optional(),
+  pincode: z.string().regex(/^[1-9][0-9]{5}$/, "expected a 6-digit PIN code").optional(),
+});
+export type AddressDto = z.infer<typeof Address>;
+
+/**
+ * Two cross-field rules, both GST correctness rather than tidiness:
+ *   registered            → must carry a GSTIN (mirrors the DB CHECK)
+ *   registered|unregistered → must carry a state code
+ *
+ * The state-code rule has no DB CHECK behind it on purpose: e2e/seed.ts and
+ * test/concurrency.ts insert companies via raw SQL without one, and overseas
+ * /SEZ parties legitimately have none. It is enforced here, at the only place
+ * a human creates a company (eng review 2026-09-10, D4).
+ */
+export const CreateCompany = z.object({
+  name: z.string().min(1).max(200),
+  gstin: gstin.optional(),
+  gstTreatment: gstTreatment.optional(),
+  stateCode: stateCode.optional(),
+  industry: z.string().max(100).optional(),
+  website: z.string().max(200).optional(),
+  billingAddress: Address.optional(),
+  shippingAddress: Address.optional(),
+  notes: z.string().max(2000).optional(),
+  isCustomer: z.boolean().optional(),
+  isSupplier: z.boolean().optional(),
+}).superRefine((c, ctx) => {
+  const treatment = c.gstTreatment ?? "unregistered";   // matches the column default
+  if (treatment === "registered" && !c.gstin) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom, path: ["gstin"],
+      message: "registered companies require a GSTIN",
+    });
+  }
+  if (DOMESTIC.includes(treatment) && !c.stateCode) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom, path: ["stateCode"],
+      message: "a state code is required — it decides CGST/SGST vs IGST",
+    });
+  }
+});
+export type CreateCompanyInput = z.infer<typeof CreateCompany>;
+
+/**
+ * Patch shape. A patch only sees the fields it carries, so it can only catch
+ * the explicit-null cases; clearing a GSTIN or state code some other way falls
+ * through to the DB CHECK, which fromPgError turns into a typed 422.
+ */
+export const UpdateCompany = z.object({
+  name: z.string().min(1).max(200).optional(),
+  gstin: gstin.nullable().optional(),
+  gstTreatment: gstTreatment.optional(),
+  stateCode: stateCode.nullable().optional(),
+  industry: z.string().max(100).nullable().optional(),
+  website: z.string().max(200).nullable().optional(),
+  billingAddress: Address.optional(),
+  shippingAddress: Address.optional(),
+  notes: z.string().max(2000).nullable().optional(),
+  isCustomer: z.boolean().optional(),
+  isSupplier: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+}).strict().superRefine((p, ctx) => {
+  if (p.gstTreatment === "registered" && p.gstin === null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom, path: ["gstin"],
+      message: "registered companies require a GSTIN",
+    });
+  }
+  if (p.gstTreatment && DOMESTIC.includes(p.gstTreatment) && p.stateCode === null) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom, path: ["stateCode"],
+      message: "a state code is required — it decides CGST/SGST vs IGST",
+    });
+  }
+});
+export type UpdateCompanyInput = z.infer<typeof UpdateCompany>;
+
+/** Full company row as the API returns it. */
+export interface CompanyDto {
+  id: string;
+  name: string;
+  gstin: string | null;
+  gst_treatment: string;
+  state_code: string | null;
+  industry: string | null;
+  website: string | null;
+  billing_address: Record<string, unknown>;
+  shipping_address: Record<string, unknown>;
+  notes: string | null;
+  is_customer: boolean;
+  is_supplier: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * What the customer picker hands to a document builder. gstin and state_code
+ * are REQUIRED (nullable) rather than optional: a caller must state what it
+ * knows about the buyer's state, because a silently-absent one used to fall
+ * back to the seller's state and produce the wrong GST split.
+ */
+export interface CustomerOption {
+  id: string;
+  name: string;
+  gstin: string | null;
+  state_code: string | null;
+  gst_treatment?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Invoicing
 // ---------------------------------------------------------------------------
 export const CreateInvoice = z.object({

@@ -24,6 +24,11 @@ export function fromPgError(err: unknown): AppError {
       return new AppError("PERIOD_CLOSED", e.message ?? "Accounting period is closed", 422);
     case "23514":
       return new AppError("CONSTRAINT_VIOLATION", e.message ?? "Constraint violation", 422);
+    case "23505":
+      // Unique violation. Every unique index we own is a name/number collision
+      // (uq_companies_name today), so callers that pre-check still get the same
+      // typed 409 when two writers race past that check.
+      return new AppError("DUPLICATE_NAME", e.message ?? "That name is already taken", 409);
     default:
       return new AppError("INTERNAL", e.message ?? "Internal error", 500);
   }

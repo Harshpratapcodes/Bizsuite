@@ -1,50 +1,33 @@
 import { Router } from "express";
-import { z } from "zod";
+import { CreateCompany, UpdateCompany } from "@bizsuite/contracts";
 import { requireAuth, actorId } from "../../core/middleware.js";
 import { requirePermission } from "../../core/rbac.js";
-import { createCompany, listCompanies, getCompany, updateCompany } from "./companies.service.js";
+import {
+  createCompany, listCompanies, getCompany, updateCompany, findCompanyByExactName,
+} from "./companies.service.js";
 
-const gstin = z.string().regex(/^[0-9]{2}[A-Z0-9]{13}$/, "invalid GSTIN format");
-const treatment = z.enum(["registered", "unregistered", "overseas", "sez"]);
-const address = z.record(z.unknown());
-
-const CreateCompany = z.object({
-  name: z.string().min(1),
-  gstin: gstin.optional(),
-  gstTreatment: treatment.optional(),
-  stateCode: z.string().length(2).optional(),
-  industry: z.string().optional(),
-  website: z.string().optional(),
-  billingAddress: address.optional(),
-  shippingAddress: address.optional(),
-  notes: z.string().optional(),
-  isCustomer: z.boolean().optional(),
-  isSupplier: z.boolean().optional(),
-}).refine((c) => c.gstTreatment !== "registered" || !!c.gstin, {
-  message: "registered companies require a GSTIN", path: ["gstin"],
-});
-
-const UpdateCompany = z.object({
-  name: z.string().min(1).optional(),
-  gstin: gstin.nullable().optional(),
-  gstTreatment: treatment.optional(),
-  stateCode: z.string().length(2).nullable().optional(),
-  industry: z.string().nullable().optional(),
-  website: z.string().nullable().optional(),
-  billingAddress: address.optional(),
-  shippingAddress: address.optional(),
-  notes: z.string().nullable().optional(),
-  isCustomer: z.boolean().optional(),
-  isSupplier: z.boolean().optional(),
-  isActive: z.boolean().optional(),
-}).strict();
-
+/**
+ * Companies master (customers & suppliers). Request shapes live in
+ * @bizsuite/contracts (D7) — the SPA validates with the same objects, so the
+ * GSTIN rule and the state-code rule cannot drift between form and server.
+ *
+ * Search is name OR GSTIN: two customers with similar names are told apart by
+ * the one identifier that is never ambiguous.
+ */
 export const companiesRouter = Router();
 
 companiesRouter.get("/", requireAuth, requirePermission("crm", "read"), async (req, res, next) => {
   try {
+    // ?name= is an EXACT, case-insensitive lookup ignoring the role/active
+    // filters. The quick-add modal uses it to recover from a DUPLICATE_NAME:
+    // ?q= is a substring search that can match several companies, so picking
+    // one of those could flip the wrong record's flags (eng review D15).
+    if (typeof req.query.name === "string") {
+      const hit = await findCompanyByExactName(req.query.name);
+      return res.json(hit ? [hit] : []);
+    }
     const role = req.query.role === "customer" || req.query.role === "supplier" ? req.query.role : undefined;
-    res.json(await listCompanies({
+    return res.json(await listCompanies({
       role,
       activeOnly: req.query.active === "true",
       search: typeof req.query.q === "string" ? req.query.q : undefined,
