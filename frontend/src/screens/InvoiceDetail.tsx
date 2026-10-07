@@ -7,6 +7,7 @@ import { useAuth, isAdmin } from "../auth";
 import { inr } from "./Khata";
 import { stateName } from "../gst-states";
 import { amountInWords } from "../inr-words";
+import { fmtAddress } from "../address";
 
 /**
  * One screen, three jobs (all fed by the same server fetch, so every number
@@ -256,19 +257,6 @@ function StageTrack({ status, paymentStatus }: { status: string; paymentStatus: 
 // Print-CSS GST invoice (design doc Approach A: "Print-CSS invoices, no PDF
 // engine yet"). Hidden on screen; @media print shows ONLY this sheet.
 // ---------------------------------------------------------------------------
-function fmtAddress(a: Record<string, unknown>): string {
-  const preferred = ["line1", "line2", "street", "area", "city", "district", "state", "pincode", "pin"];
-  const seen = new Set<string>();
-  const parts: string[] = [];
-  for (const k of preferred) {
-    const v = a[k];
-    if (typeof v === "string" && v) { parts.push(v); seen.add(k); }
-  }
-  for (const [k, v] of Object.entries(a)) {
-    if (!seen.has(k) && typeof v === "string" && v) parts.push(v);
-  }
-  return parts.join(", ");
-}
 
 function PrintSheet({ d }: { d: InvoiceDetail }) {
   const intra = !d.is_inter_state;

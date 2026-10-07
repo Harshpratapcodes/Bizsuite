@@ -7,6 +7,7 @@ import { useAuth, isAdmin, canCreateSalesOrder } from "../auth";
 import { inr } from "./Khata";
 import { stateName } from "../gst-states";
 import { amountInWords } from "../inr-words";
+import { fmtAddress } from "../address";
 
 /**
  * One screen, several jobs (all fed by the same server fetch, so every number
@@ -280,19 +281,6 @@ function StageTrack({ status, ordered }: { status: string; ordered: boolean }) {
 // ---------------------------------------------------------------------------
 // Print-CSS quotation. Hidden on screen; @media print shows ONLY this sheet.
 // ---------------------------------------------------------------------------
-function fmtAddress(a: Record<string, unknown>): string {
-  const preferred = ["line1", "line2", "street", "area", "city", "district", "state", "pincode", "pin"];
-  const seen = new Set<string>();
-  const parts: string[] = [];
-  for (const k of preferred) {
-    const v = a[k];
-    if (typeof v === "string" && v) { parts.push(v); seen.add(k); }
-  }
-  for (const [k, v] of Object.entries(a)) {
-    if (!seen.has(k) && typeof v === "string" && v) parts.push(v);
-  }
-  return parts.join(", ");
-}
 
 function PrintSheet({ d }: { d: QuotationDetail }) {
   const intra = !d.is_inter_state;

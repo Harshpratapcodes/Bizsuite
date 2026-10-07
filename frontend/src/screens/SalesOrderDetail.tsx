@@ -7,6 +7,7 @@ import { useAuth, isAdmin, canCreateInvoice } from "../auth";
 import { inr } from "./Khata";
 import { stateName } from "../gst-states";
 import { amountInWords } from "../inr-words";
+import { fmtAddress } from "../address";
 
 /**
  * Sales order detail — one screen fed by one server fetch:
@@ -294,19 +295,6 @@ function StageTrack({ status, billingStatus }: { status: string; billingStatus: 
   );
 }
 
-function fmtAddress(a: Record<string, unknown>): string {
-  const preferred = ["line1", "line2", "street", "area", "city", "district", "state", "pincode", "pin"];
-  const seen = new Set<string>();
-  const parts: string[] = [];
-  for (const k of preferred) {
-    const v = a[k];
-    if (typeof v === "string" && v) { parts.push(v); seen.add(k); }
-  }
-  for (const [k, v] of Object.entries(a)) {
-    if (!seen.has(k) && typeof v === "string" && v) parts.push(v);
-  }
-  return parts.join(", ");
-}
 
 function PrintSheet({ d }: { d: SalesOrderDetail }) {
   const intra = !d.is_inter_state;
