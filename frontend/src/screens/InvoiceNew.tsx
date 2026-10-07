@@ -102,7 +102,11 @@ export function InvoiceNewScreen() {
 
   function pickCustomer(c: CustomerOption | null) {
     setCustomer(c);
-    if (c) setPlaceOfSupply(c.state_code ?? company.data?.state_code ?? "");
+    // Place of supply comes from the BUYER only. It deliberately does not fall
+    // back to the seller state: an unknown buyer state used to silently render
+    // "CGST + SGST" and bill an interstate sale wrongly. Blank leaves the zod
+    // check failing, so Save stays disabled until someone picks (eng review T1).
+    if (c) setPlaceOfSupply(c.state_code ?? "");
   }
 
   function pickItem(key: number, item: ItemOption) {
