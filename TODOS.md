@@ -28,3 +28,21 @@ Captured by /plan-eng-review on 2026-07-04. Each entry carries enough context to
 - **Cons:** Toolchain churn for zero new coverage — which is why it was deliberately kept out of Approach A.
 - **Context:** Kept tsx scripts in A for consistency (eng review D8 discussion). Right moment: early B, or when suite count doubles.
 - **Depends on / blocked by:** CI pipeline existing (blueprint Phase 0 completion).
+
+## 4. `accounts` role: grant CRM write, or not?
+
+- **What:** Decide whether the `accounts` role gains `crm` write; if yes, add it to the seeded matrix and ship an UPDATE migration for the live database.
+- **Why:** `accounts` can raise quotations and invoices but cannot create the customer they are for. The customer quick-add button is deliberately hidden from them (eng review 2026-09-10, D5), so they still hit the dead end the feature exists to remove — just without a misleading button.
+- **Pros:** One line in the seed plus a migration; makes the permission model match how documents actually get raised.
+- **Cons:** Widens write access to the party master that feeds the receivables/payables sub-ledger.
+- **Context:** `schema.sql:1193` gives accounts `ARRAY['accounting','invoicing','sales']` — no `crm`. `frontend/src/auth.tsx:72` lets them quote, and `companies.routes.ts:55` requires `crm:write`. **The blocker is a business question, not a technical one: does an accounts person ever serve a new walk-in customer directly?** If yes, grant it. If they only process paperwork someone else originated, leave it as-is.
+- **Depends on / blocked by:** Nothing technical. Needs an answer from whoever knows who works the counter.
+
+## 5. Real pagination for the customers (and items) master
+
+- **What:** Replace the hardcoded `LIMIT 500` in `listCompanies` with limit/offset or cursor paging, plus paging controls on the customers screen.
+- **Why:** The customers master ships with a "showing the first 500 — use search to narrow" notice (eng review 2026-09-10, D11) rather than paging. Honest, but records past 500 remain reachable only by search.
+- **Pros:** Correct at any size; the same pattern serves the items master, which carries the identical cap.
+- **Cons:** Speculative until the customer count actually approaches 500; adds API surface that must stay supported.
+- **Context:** `companies.service.ts:64` and `items.service.ts:64` both hardcode `ORDER BY name LIMIT 500`. **Trigger to act: the customer count passes ~400, or the CSV import lands a book bigger than that.** Check the row count immediately after the go-live import runs.
+- **Depends on / blocked by:** The CSV import script may reveal the real size on day one.
