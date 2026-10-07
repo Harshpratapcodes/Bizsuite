@@ -23,7 +23,8 @@
     "test:periods": "tsx test/periods.ts",
     "test:khata": "tsx test/khata.ts",
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:web": "npm run test --workspace frontend"
   },
   "dependencies": {
     "@bizsuite/contracts": "*",

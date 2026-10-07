@@ -62,6 +62,9 @@ jobs:
       - name: RBAC suite
         run: npm run test:rbac
 
+      - name: Frontend suite (Vitest)
+        run: npm run test:web
+
       - name: Masters suite
         run: npm run test:masters
 
