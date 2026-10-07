@@ -8,6 +8,7 @@ import { AppError } from "./shared/errors.js";
 import { pool } from "./shared/db.js";
 import { login, logout } from "./core/auth.js";
 import { requireAuth, readCookie, sessionCookieOptions, clearCookieOptions, SESSION_COOKIE } from "./core/middleware.js";
+import { assertDevBypassSafe } from "./core/dev-auth.js";
 import { settingsRouter } from "./core/settings.routes.js";
 import { itemsRouter } from "./modules/inventory/items.routes.js";
 import { warehousesRouter } from "./modules/inventory/warehouses.routes.js";
@@ -22,6 +23,9 @@ import { accountingRouter } from "./modules/accounting/accounting.routes.js";
  * Mount-only composition root (eng review D6): auth endpoints + one router per
  * module. Business routes live in src/modules/<module>/<name>.routes.ts.
  */
+// Refuses to boot if the dev login bypass is set in a production build.
+assertDevBypassSafe();
+
 const app = express();
 // Behind Render/nginx TLS termination: trust the first proxy hop so req.ip is
 // the client (audit logs, future rate limiting), not the proxy.

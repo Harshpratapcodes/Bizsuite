@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { AppError } from "../shared/errors.js";
 import { validateSession, type AuthUser } from "./auth.js";
+import { devBypassEnabled, getDevUser } from "./dev-auth.js";
 
 export const SESSION_COOKIE = "sid";
 
@@ -51,6 +52,13 @@ export function clearCookieOptions() {
 /** Require a valid session; populates req.user or throws 401. */
 export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   try {
+    // Dev-only escape hatch (DEV_AUTH_BYPASS=true, never in production): run as
+    // a real seeded user so RBAC and audit FKs behave exactly as they would
+    // after a normal login. See core/dev-auth.ts.
+    if (devBypassEnabled()) {
+      req.user = await getDevUser();
+      return next();
+    }
     const token = readCookie(req, SESSION_COOKIE);
     if (!token) throw new AppError("UNAUTHENTICATED", "Login required", 401);
     const user = await validateSession(token);
