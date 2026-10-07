@@ -24,7 +24,8 @@
     "test:khata": "tsx test/khata.ts",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
-    "test:web": "npm run test --workspace frontend"
+    "test:web": "npm run test --workspace frontend",
+    "import:customers": "tsx scripts/import-customers.ts"
   },
   "dependencies": {
     "@bizsuite/contracts": "*",
